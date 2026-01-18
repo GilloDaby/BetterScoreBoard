@@ -193,14 +193,16 @@ final class BetterScoreBoardConfig {
 
     private static BetterScoreBoardConfig defaults(Path dataDir) {
         List<String> defaults = new ArrayList<>();
-        defaults.add("Server: {server}");
-        defaults.add("World: {world}");
-        defaults.add("Players: {online}/{max_players}");
-        defaults.add("You: {player}");
-        defaults.add("Playtime: {playtime}");
-        defaults.add("TPS: {tps}");
-        defaults.add("Money: {money}");
-        defaults.add("Balance: {balance}");
+        defaults.add("[#aaffff]       *Welcome to : {server}*");
+        defaults.add("[#0bec00]               *Current world: {world}*");
+        defaults.add(" ");
+        defaults.add("[#ffa500]                     *Online: {online}/{max_players}*");
+        defaults.add("[#ff00ff]      *{player} | Playtime: {playtime}*");
+        defaults.add(" ");
+        defaults.add("[#cfe900]      * Coords: {pos_x}  {pos_y}  {pos_z}*");
+        defaults.add("[#cfe900]       *         Money: {money}$ / TPS: {tps}*");
+        defaults.add(" ");
+        defaults.add("      *Join the Discord: discord.gg/hytale*");
 
         return new BetterScoreBoardConfig(
             "Better ScoreBoard",
@@ -233,7 +235,6 @@ final class BetterScoreBoardConfig {
         lines.add("# Better ScoreBoard configuration");
         lines.add("title: \"" + defaults.title + "\"");
         lines.add("# Optional custom logo path (unused by default to avoid client restrictions)");
-        lines.add("logoTexturePath: \"\"");
         lines.add("# HUD refresh rate (seconds). Use decimals for sub-second updates.");
         lines.add("refreshSeconds: 1.0");
         lines.add("# Maximum lines rendered (capped by the HUD layout)");

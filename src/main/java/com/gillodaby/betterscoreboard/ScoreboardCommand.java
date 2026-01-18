@@ -287,8 +287,10 @@ final class ScoreboardCommand extends AbstractCommand {
             "  tip: you can wrap text in quotes to keep spaces, e.g. /scoreboard add \"    centered text    \"",
             "/scoreboard remove <index>",
             "/scoreboard save",
+            "/scoreboard divider [on|off|toggle]",
             "/scoreboard show",
             "/scoreboard off",
+            "/scoreboard help",
             "Placeholders: " + service.placeholdersLine()
         );
         ctx.sendMessage(service.text(help));

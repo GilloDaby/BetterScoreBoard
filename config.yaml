@@ -1,10 +1,9 @@
 # Better ScoreBoard configuration
 title: "Better ScoreBoard"
-logoTexturePath: "Custom/Textures/BetterScoreBoard/logo.png"
 # HUD refresh rate (seconds). Use decimals for sub-second updates.
 refreshSeconds: 1.0
 # Maximum lines rendered (capped by the HUD layout)
-maxLines: 10
+maxLines: 12
 # Show the divider line below the title
 dividerVisible: true
 # Lines to render from top to bottom. Available placeholders:
@@ -17,7 +16,13 @@ dividerVisible: true
 # {tps} -> measured TPS for your world
 # {money} -> economy placeholder
 lines:
-  - "Server: {server}"
-  - "World: {world}"
-  - "Players: {online}/{max_players}"
-  - "You: {player}"
+  - "[#aaffff]       *Welcome to : {server}*"
+  - "[#0bec00]               *Current world: {world}*"
+  - " "
+  - "[#ffa500]                     *Online: {online}/{max_players}*"
+  - "[#ff00ff]      *{player} | Playtime: {playtime}*"
+  - " "
+  - "[#cfe900]      * Coords: {pos_x}  {pos_y}  {pos_z}*"
+  - "[#cfe900]       *         Money: {money}$ / TPS: {tps}*"
+  - " "
+  - "      *Join the Discord: discord.gg/hytale*"

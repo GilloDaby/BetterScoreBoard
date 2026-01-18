@@ -177,27 +177,58 @@ final class BetterScoreBoardService {
     }
 
     private void refreshAll() {
-        int online = huds.size();
         for (Map.Entry<UUID, TrackedHud> entry : huds.entrySet()) {
             UUID id = entry.getKey();
             TrackedHud tracked = entry.getValue();
-            if (tracked == null || tracked.player == null || tracked.player.wasRemoved()) {
+            if (tracked == null) {
                 huds.remove(id);
                 continue;
             }
-            try {
-                tracked.hud.refresh(tracked.player, tracked.ref, buildView(tracked.player, online));
-            } catch (Throwable ignored) {
+            Player player = tracked.player;
+            if (player == null || player.wasRemoved()) {
+                huds.remove(id);
+                continue;
             }
+            PlayerRef ref = tracked.ref;
+            BetterScoreBoardHud hud = tracked.hud;
+            executeOnWorldThread(player, () -> {
+                try {
+                    hud.refresh(player, ref, buildView(player, huds.size()));
+                } catch (Throwable ignored) {
+                }
+            });
         }
     }
 
     private void refreshSingle(UUID id) {
         TrackedHud tracked = huds.get(id);
-        if (tracked == null || tracked.player == null) {
+        if (tracked == null) {
             return;
         }
-        tracked.hud.refresh(tracked.player, tracked.ref, buildView(tracked.player, huds.size()));
+        Player player = tracked.player;
+        if (player == null || player.wasRemoved()) {
+            huds.remove(id);
+            return;
+        }
+        PlayerRef ref = tracked.ref;
+        BetterScoreBoardHud hud = tracked.hud;
+        executeOnWorldThread(player, () -> {
+            try {
+                hud.refresh(player, ref, buildView(player, huds.size()));
+            } catch (Throwable ignored) {
+            }
+        });
+    }
+
+    private void executeOnWorldThread(Player player, Runnable action) {
+        if (player == null || action == null) {
+            return;
+        }
+        World world = player.getWorld();
+        if (world == null) {
+            return;
+        }
+        world.execute(action);
     }
 
     private ScoreboardView buildView(Player player, int onlineCount) {
