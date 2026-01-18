@@ -1,0 +1,23 @@
+# Better ScoreBoard configuration
+title: "Better ScoreBoard"
+logoTexturePath: "Custom/Textures/BetterScoreBoard/logo.png"
+# HUD refresh rate (seconds). Use decimals for sub-second updates.
+refreshSeconds: 1.0
+# Maximum lines rendered (capped by the HUD layout)
+maxLines: 10
+# Show the divider line below the title
+dividerVisible: true
+# Lines to render from top to bottom. Available placeholders:
+# {server} -> server name
+# {world} -> current world name
+# {online} -> number of tracked players
+# {max_players} -> server max players
+# {player} -> player display name
+# {playtime} -> session playtime
+# {tps} -> measured TPS for your world
+# {money} -> economy placeholder
+lines:
+  - "Server: {server}"
+  - "World: {world}"
+  - "Players: {online}/{max_players}"
+  - "You: {player}"

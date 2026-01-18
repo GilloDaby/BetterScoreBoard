@@ -1,0 +1,11 @@
+{
+  "id": "betterscoreboard",
+  "name": "Better ScoreBoard",
+  "version": "1.3.0",
+  "author": "GilloDaby",
+  "description": "Custom scoreboard on the right.",
+  "main": "com.gillodaby.betterscoreboard.BetterScoreBoardPlugin",
+  "dependencies": [
+    "Buuz135:MultipleHUD"
+  ]
+}

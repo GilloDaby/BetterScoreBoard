@@ -1,0 +1,226 @@
+$C = "../Common.ui";
+
+Group #EditorRoot {
+  Anchor: (Full: 0);
+  LayoutMode: Middle;
+  Background: #0a0c10(0.82);
+
+    Group #Panel {
+    Anchor: (Width: 900, Height: 620);
+    LayoutMode: Top;
+    Padding: (Left: 22, Right: 22, Top: 18, Bottom: 18);
+    Background: (TexturePath: "../Common/Popup.png", Border: 14);
+
+    Group #Header {
+      Anchor: (Width: 856, Height: 140);
+      LayoutMode: Top;
+      Padding: (Left: 6, Right: 6, Top: 2, Bottom: 8);
+
+      Label #EditorTitle {
+        @Text = "Better ScoreBoard";
+        Anchor: (Width: 856, Height: 34);
+        Style: (FontSize: 22, RenderBold: true, TextColor: #f6f8ff, HorizontalAlignment: Center, VerticalAlignment: Center);
+      }
+
+      Label #PlaceholderHint {
+        @Text = "Placeholders: {server}, {world}, {online}, {max_players}, {player}, {playtime}, {tps}, {money}";
+        Anchor: (Width: 856, Height: 20);
+        Style: (FontSize: 13, TextColor: #c8d2e3, HorizontalAlignment: Center, VerticalAlignment: Center);
+      }
+
+      Label #LimitHint {
+        @Text = "Max lines shown: 12";
+        Anchor: (Width: 856, Height: 20);
+        Style: (FontSize: 12, TextColor: #8ca0bf, HorizontalAlignment: Center, VerticalAlignment: Center);
+      }
+
+      Group #TitleRow {
+        LayoutMode: Left;
+        Anchor: (Width: 856, Height: 56);
+        Padding: (Left: 12, Right: 12, Top: 4, Bottom: 4);
+
+        Label {
+          Text: "Titre du scoreboard";
+          Anchor: (Width: 200, Height: 40);
+          Style: (FontSize: 14, TextColor: #c8d2e3, VerticalAlignment: Center);
+        }
+
+        Group { Anchor: (Width: 10); }
+
+        $C.@TextField #TitleInput {
+          FlexWeight: 1;
+          PlaceholderText: "Add your server name";
+        }
+
+        Group { Anchor: (Width: 10); }
+
+        $C.@TextField #TitleColorHex {
+          Anchor: (Width: 140, Height: 38);
+          PlaceholderText: "#ffffff";
+        }
+      }
+
+    }
+
+    Group #ScrollArea {
+      Anchor: (Width: 856, Height: 380);
+      LayoutMode: TopScrolling;
+      Padding: (Left: 6, Right: 6, Top: 8, Bottom: 8);
+      Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 12);
+
+      Group #LinesColumn {
+        Anchor: (Full: 0);
+        LayoutMode: Top;
+        Padding: (Top: 2, Bottom: 2, Left: 2, Right: 2);
+        Background: #0a0c10(0.0);
+
+        Group #Line1Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line1Index { @Text = "01"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line1Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line1Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 1"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line2Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line2Index { @Text = "02"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line2Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line2Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 2"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line3Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line3Index { @Text = "03"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line3Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line3Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 3"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line4Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line4Index { @Text = "04"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line4Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line4Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 4"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line5Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line5Index { @Text = "05"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line5Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line5Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 5"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line6Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line6Index { @Text = "06"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line6Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line6Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 6"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line7Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line7Index { @Text = "07"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line7Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line7Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 7"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line8Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line8Index { @Text = "08"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line8Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line8Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 8"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line9Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line9Index { @Text = "09"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line9Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line9Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 9"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line10Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line10Index { @Text = "10"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line10Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line10Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 10"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line11Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line11Index { @Text = "11"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line11Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line11Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 11"; }
+        }
+        Group { Anchor: (Height: 6); }
+
+        Group #Line12Row { Anchor: (Width: 832, Height: 58); LayoutMode: Left; Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6); Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 8);
+          Label #Line12Index { @Text = "12"; Anchor: (Width: 42, Height: 32); Style: (FontSize: 14, RenderBold: true, TextColor: #9fc5ff, HorizontalAlignment: Center, VerticalAlignment: Center); }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line12Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
+          Group { Anchor: (Width: 10); }
+          $C.@TextField #Line12Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 12"; }
+        }
+      }
+    }
+
+    Group #Footer {
+      Anchor: (Width: 856, Height: 98);
+      LayoutMode: Left;
+      Padding: (Top: 12, Bottom: 6, Left: 4, Right: 4);
+
+      $C.@TextButton #ApplyButton {
+        @Text = "Apply";
+        Anchor: (Width: 180, Height: 46);
+      }
+
+      Group { Anchor: (Width: 12); }
+
+      $C.@SecondaryTextButton #SaveButton {
+        @Text = "Save";
+        Anchor: (Width: 210, Height: 46);
+      }
+
+      Group { Anchor: (Width: 12); }
+
+      $C.@SecondaryTextButton #ReloadButton {
+        @Text = "Reload";
+        Anchor: (Width: 180, Height: 46);
+      }
+
+      Group { Anchor: (Width: 12); }
+
+      $C.@CancelTextButton #CloseButton {
+        @Text = "Close";
+        Anchor: (Width: 140, Height: 46);
+      }
+
+      Group { FlexWeight: 1; }
+
+      Label #StatusHint {
+        @Text = "Add, modify, or clear lines, then click Apply.";
+        Anchor: (Width: 260, Height: 32);
+        Style: (FontSize: 12, TextColor: #c8d2e3, VerticalAlignment: Center);
+      }
+    }
+  }
+}

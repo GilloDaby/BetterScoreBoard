@@ -1,0 +1,49 @@
+Group #BoardRoot {
+  Anchor: (Width: 280, Height: 320, Right: 1, Top: 400);
+  LayoutMode: Top;
+  Padding: (Left: 10, Right: 10, Top: 10, Bottom: 10);
+  Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 6);
+
+  // Header (logo + titre)
+  Group #Header {
+    Anchor: (Width: 260, Height: 90);
+    LayoutMode: Top;
+    Padding: (Left: 4, Right: 4, Top: 0, Bottom: 8);
+
+    Group #BoardLogo {
+      Anchor: (Width: 252, Height: 64, Left: 0, Top: 0);
+      Background: (TexturePath: "../Common/Textures/BetterScoreBoard/better_logo.png");
+      Visible: true;
+    }
+
+    Label #BoardTitle {
+      @Text = "Better ScoreBoard";
+      Anchor: (Width: 252, Height: 22, Top: 5);
+      Style: (FontSize: 16, RenderBold: true, TextColor: #f2f4f8, HorizontalAlignment: Center, VerticalAlignment: Center);
+    }
+  }
+
+  Label #Divider {
+    Anchor: (Width: 296, Height: 4, Top: 6);
+    Background: (TexturePath: "Tiles/TileEmpty.png");
+  }
+
+  Group #Lines {
+    Anchor: (Width: 260, Height: 180);
+    LayoutMode: Top;
+    Padding: (Top: 6, Bottom: 4);
+
+    Label #Line1 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line2 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line3 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line4 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line5 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line6 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line7 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line8 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line9 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line10 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line11 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+    Label #Line12 { @Text = ""; Anchor: (Width: 260, Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff); }
+  }
+}
