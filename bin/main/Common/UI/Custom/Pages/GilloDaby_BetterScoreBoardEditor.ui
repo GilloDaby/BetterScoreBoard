@@ -34,6 +34,12 @@ Group #EditorRoot {
         Style: (FontSize: 12, TextColor: #8ca0bf, HorizontalAlignment: Center, VerticalAlignment: Center);
       }
 
+      Label #ColorHint {
+        @Text = "Prefix each section with [#rrggbb] to layer colors";
+        Anchor: (Width: 856, Height: 20);
+        Style: (FontSize: 12, TextColor: #8ca0bf, HorizontalAlignment: Center, VerticalAlignment: Center);
+      }
+
       Group #TitleRow {
         LayoutMode: Left;
         Anchor: (Width: 856, Height: 56);
@@ -79,7 +85,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line1Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line1Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 1"; }
+          $C.@TextField #Line1Input { FlexWeight: 1; PlaceholderText: "Text for line 1"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -88,7 +94,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line2Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line2Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 2"; }
+          $C.@TextField #Line2Input { FlexWeight: 1; PlaceholderText: "Text for line 2"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -97,7 +103,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line3Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line3Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 3"; }
+          $C.@TextField #Line3Input { FlexWeight: 1; PlaceholderText: "Text for line 3"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -106,7 +112,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line4Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line4Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 4"; }
+          $C.@TextField #Line4Input { FlexWeight: 1; PlaceholderText: "Text for line 4"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -115,7 +121,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line5Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line5Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 5"; }
+          $C.@TextField #Line5Input { FlexWeight: 1; PlaceholderText: "Text for line 5"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -124,7 +130,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line6Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line6Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 6"; }
+          $C.@TextField #Line6Input { FlexWeight: 1; PlaceholderText: "Text for line 6"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -133,7 +139,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line7Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line7Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 7"; }
+          $C.@TextField #Line7Input { FlexWeight: 1; PlaceholderText: "Text for line 7"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -142,7 +148,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line8Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line8Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 8"; }
+          $C.@TextField #Line8Input { FlexWeight: 1; PlaceholderText: "Text for line 8"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -151,7 +157,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line9Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line9Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 9"; }
+          $C.@TextField #Line9Input { FlexWeight: 1; PlaceholderText: "Text for line 9"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -160,7 +166,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line10Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line10Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 10"; }
+          $C.@TextField #Line10Input { FlexWeight: 1; PlaceholderText: "Text for line 10"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -169,7 +175,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line11Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line11Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 11"; }
+          $C.@TextField #Line11Input { FlexWeight: 1; PlaceholderText: "Text for line 11"; }
         }
         Group { Anchor: (Height: 6); }
 
@@ -178,7 +184,7 @@ Group #EditorRoot {
           Group { Anchor: (Width: 10); }
           $C.@TextField #Line12Color { Anchor: (Width: 120, Height: 32); PlaceholderText: "#ffffff"; }
           Group { Anchor: (Width: 10); }
-          $C.@TextField #Line12Input { FlexWeight: 1; PlaceholderText: "Texte pour la ligne 12"; }
+          $C.@TextField #Line12Input { FlexWeight: 1; PlaceholderText: "Text for line 12"; }
         }
       }
     }

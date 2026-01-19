@@ -5,10 +5,13 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.entity.entities.player.hud.CustomUIHud;
 import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import java.util.List;
 
 final class BetterScoreBoardHud extends CustomUIHud {
 
     static final int MAX_LINES = 12;
+    private static final int MAX_SEGMENTS = 25;
+    private static final String DEFAULT_TEXT_COLOR = "#f6f8ff";
 
     private final BetterScoreBoardConfig config;
     private volatile ScoreboardView currentView;
@@ -59,25 +62,44 @@ final class BetterScoreBoardHud extends CustomUIHud {
         int maxVisible = Math.min(MAX_LINES, config.maxLines());
         for (int i = 0; i < MAX_LINES; i++) {
             String baseId = "#Line" + (i + 1);
-            String textSelector = baseId + ".Text";
-            String visibleSelector = baseId + ".Visible";
-            String colorSelector = baseId + ".Style.TextColor";
+            String rowSelector = baseId + "Row.Visible";
 
             if (view.lines() != null && i < maxVisible && i < view.lines().size()) {
                 ScoreboardView.LineRender render = view.lines().get(i);
-                builder.set(textSelector, render.text());
-                if (render.color() != null && !render.color().isEmpty()) {
-                    builder.set(colorSelector, render.color());
-                } else {
-                    builder.set(colorSelector, "#f6f8ff");
+                builder.set(rowSelector, true);
+                List<ScoreboardView.LineSegment> segments = render.segments();
+                for (int segmentIndex = 0; segmentIndex < MAX_SEGMENTS; segmentIndex++) {
+                    String segmentId = segmentIndex == 0 ? baseId : baseId + "Segment" + (segmentIndex + 1);
+                    String textSelector = segmentId + ".Text";
+                    String colorSelector = segmentId + ".Style.TextColor";
+                    String boldSelector = segmentId + ".Style.RenderBold";
+                    String visibleSelector = segmentId + ".Visible";
+                    if (segmentIndex < segments.size()) {
+                        ScoreboardView.LineSegment segment = segments.get(segmentIndex);
+                        String color = segment.color();
+                        if (color == null || color.isEmpty()) {
+                            color = DEFAULT_TEXT_COLOR;
+                        }
+                        builder.set(textSelector, segment.text());
+                        builder.set(colorSelector, color);
+                        builder.set(boldSelector, render.bold());
+                        builder.set(visibleSelector, !segment.text().isEmpty());
+                    } else {
+                        builder.set(textSelector, "");
+                        builder.set(colorSelector, DEFAULT_TEXT_COLOR);
+                        builder.set(boldSelector, false);
+                        builder.set(visibleSelector, false);
+                    }
                 }
-                builder.set(baseId + ".Style.RenderBold", render.bold());
-                builder.set(visibleSelector, true);
             } else {
-                builder.set(textSelector, "");
-                builder.set(colorSelector, "#f6f8ff");
-                builder.set(baseId + ".Style.RenderBold", false);
-                builder.set(visibleSelector, false);
+                builder.set(rowSelector, false);
+                for (int segmentIndex = 0; segmentIndex < MAX_SEGMENTS; segmentIndex++) {
+                    String segmentId = segmentIndex == 0 ? baseId : baseId + "Segment" + (segmentIndex + 1);
+                    builder.set(segmentId + ".Text", "");
+                    builder.set(segmentId + ".Style.TextColor", DEFAULT_TEXT_COLOR);
+                    builder.set(segmentId + ".Style.RenderBold", false);
+                    builder.set(segmentId + ".Visible", false);
+                }
             }
         }
     }

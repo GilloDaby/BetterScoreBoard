@@ -128,10 +128,25 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
     private String encodeLine(String color, String text) {
         String sanitizedColor = sanitizeColor(color);
         String sanitizedText = safe(text);
+        if (!sanitizedText.isEmpty() && textStartsWithColorSegment(sanitizedText)) {
+            return sanitizedText;
+        }
         if (!sanitizedColor.isEmpty()) {
             return "[" + sanitizedColor + "]" + sanitizedText;
         }
         return sanitizedText;
+    }
+
+    private boolean textStartsWithColorSegment(String raw) {
+        if (raw == null || raw.length() < 8 || raw.charAt(0) != '[') {
+            return false;
+        }
+        int close = raw.indexOf(']');
+        if (close <= 1 || close > 8) {
+            return false;
+        }
+        String maybeColor = raw.substring(1, close);
+        return !sanitizeColor(maybeColor).isEmpty();
     }
 
     private String sanitizeColor(String raw) {

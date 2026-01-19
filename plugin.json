@@ -1,7 +1,7 @@
 {
   "id": "betterscoreboard",
   "name": "Better ScoreBoard",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "author": "GilloDaby",
   "description": "Custom scoreboard on the right.",
   "main": "com.gillodaby.betterscoreboard.BetterScoreBoardPlugin",

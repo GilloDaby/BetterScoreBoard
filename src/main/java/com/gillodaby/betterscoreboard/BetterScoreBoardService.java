@@ -248,10 +248,10 @@ final class BetterScoreBoardService {
             if (template == null) {
                 continue;
             }
-            LineParts parts = decodeLine(template);
-            String line = applyPlaceholders(parts.text(), player, onlineCount);
-            BoldResult boldResult = stripBoldMarkers(line);
-            formatted.add(new ScoreboardView.LineRender(boldResult.text(), parts.color(), boldResult.bold()));
+            String lineWithPlaceholders = applyPlaceholders(template, player, onlineCount);
+            BoldResult boldResult = stripBoldMarkers(lineWithPlaceholders);
+            List<ScoreboardView.LineSegment> segments = parseSegments(boldResult.text());
+            formatted.add(new ScoreboardView.LineRender(List.copyOf(segments), boldResult.bold()));
             if (formatted.size() >= max) {
                 break;
             }
@@ -510,25 +510,6 @@ final class BetterScoreBoardService {
 
     private enum Axis { X, Y, Z }
 
-    private LineParts decodeLine(String raw) {
-        if (raw == null) {
-            return new LineParts("", "");
-        }
-        String color = "";
-        String text = raw;
-        if (raw.startsWith("[") && raw.length() > 8) {
-            int close = raw.indexOf(']');
-            if (close > 1) {
-                String maybeColor = raw.substring(1, close);
-                if (isHexColor(maybeColor)) {
-                    color = maybeColor;
-                    text = raw.substring(close + 1);
-                }
-            }
-        }
-        return new LineParts(color, text);
-    }
-
     private BoldResult stripBoldMarkers(String raw) {
         if (raw == null || raw.isEmpty()) {
             return new BoldResult("", false);
@@ -549,23 +530,83 @@ final class BetterScoreBoardService {
         return new BoldResult(builder.toString(), pairFound);
     }
 
-    private boolean isHexColor(String value) {
-        if (value == null) {
-            return false;
+    private List<ScoreboardView.LineSegment> parseSegments(String value) {
+        List<ScoreboardView.LineSegment> segments = new ArrayList<>();
+        String content = value != null ? value : "";
+        String currentColor = "";
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < content.length(); ) {
+            char c = content.charAt(i);
+            if (c == '[') {
+                int close = content.indexOf(']', i);
+                if (close > i + 1) {
+                    String candidate = content.substring(i + 1, close);
+                    String normalized = normalizeColor(candidate);
+                    if (!normalized.isEmpty()) {
+                        if (builder.length() > 0) {
+                            segments.add(new ScoreboardView.LineSegment(builder.toString(), currentColor));
+                            builder.setLength(0);
+                        }
+                        currentColor = normalized;
+                        i = close + 1;
+                        continue;
+                    }
+                }
+            }
+            builder.append(c);
+            i++;
         }
-        String v = value.startsWith("#") ? value.substring(1) : value;
-        if (v.length() != 6) {
-            return false;
+        if (builder.length() > 0) {
+            segments.add(new ScoreboardView.LineSegment(builder.toString(), currentColor));
         }
-        for (char c : v.toCharArray()) {
+        if (segments.isEmpty()) {
+            segments.add(new ScoreboardView.LineSegment("", currentColor));
+        }
+        return segments;
+    }
+
+    private String normalizeColor(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        String candidate = trimmed.startsWith("#") ? trimmed.substring(1) : trimmed;
+        if (candidate.length() != 6) {
+            return "";
+        }
+        for (char c : candidate.toCharArray()) {
             if (Character.digit(c, 16) < 0) {
-                return false;
+                return "";
             }
         }
-        return true;
+        return "#" + candidate.toLowerCase();
+    }
+
+    private LineParts decodeLine(String raw) {
+        if (raw == null) {
+            return new LineParts("", "");
+        }
+        String color = "";
+        String text = raw;
+        if (raw.startsWith("[") && raw.length() > 8) {
+            int close = raw.indexOf(']');
+            if (close > 1) {
+                String candidate = raw.substring(1, close);
+                String normalized = normalizeColor(candidate);
+                if (!normalized.isEmpty()) {
+                    color = normalized;
+                    text = raw.substring(close + 1);
+                }
+            }
+        }
+        return new LineParts(color, text);
     }
 
     private record BoldResult(String text, boolean bold) {}
+
     private record LineParts(String color, String text) {}
 
     private String sanitizeTitle(String requestedTitle) {
