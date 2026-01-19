@@ -1,21 +1,25 @@
 # Better ScoreBoard configuration
-title: "Better ScoreBoard"
+title: "[#f6f8ff]Page 1"
+# Optional custom logo path (unused by default to avoid client restrictions)
+logoTexturePath: "Custom/Textures/BetterScoreBoard/logo.png"
 # HUD refresh rate (seconds). Use decimals for sub-second updates.
-refreshSeconds: 1.0
+refreshSeconds: 2.5
 # Maximum lines rendered (capped by the HUD layout)
-maxLines: 12
-# Show the divider line below the title
-dividerVisible: true
+maxLines: 10
+# HUD offsets in pixels
+offsetRight: 24
+offsetTop: 140
+dividerVisible: false
+# Rotation of multiple pages
+rotationEnabled: true
+activePage: 5
 # Lines to render from top to bottom. Available placeholders:
-# {server} -> server name
-# {world} -> current world name
-# {online} -> number of tracked players
-# {max_players} -> server max players
-# {player} -> player display name
-# {playtime} -> session playtime
-# {tps} -> measured TPS for your world
-# {money} -> economy placeholder
-lines:
+# {server}, {world}, {online}, {max_players}, {player}, {playtime}, {tps}, {money}, {balance}
+# Page 1
+page1Title: "[#f6f8ff]Page 1"
+page1DurationSeconds: 2.0
+page1RefreshSeconds: 0.3
+page1Lines:
   - "[#aaffff]       *Welcome to : {server}*"
   - "[#0bec00]               *Current world: {world}*"
   - " "
@@ -26,3 +30,51 @@ lines:
   - "[#cfe900]       *         Money: {money}$ / TPS: {tps}*"
   - " "
   - "      *Join the Discord: discord.gg/hytale*"
+  - "[#aaffff]       *Welcome to : {server}*"
+  - "[#0bec00]               *Current world: {world}*"
+# Page 2
+page2Title: "[#f6f8ff]Page 2"
+page2DurationSeconds: 1.0
+page2RefreshSeconds: 2.5
+page2Lines:
+  - "[#aaffff]"
+  - "[#0bec00]"
+  - " "
+  - "[#ffa500]                     *Online: {online}/{max_players}*"
+  - "[#ff00ff]"
+  - " "
+  - "[#cfe900]"
+  - "[#cfe900]"
+  - " "
+# Page 3
+page3Title: "[#f6f8ff]Page 3"
+page3DurationSeconds: 1.0
+page3RefreshSeconds: 2.5
+page3Lines:
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - "      *Join the Discord: discord.gg/hytale*"
+# Page 4
+page4Title: "[#f6f8ff]Page 4"
+page4DurationSeconds: 1.0
+page4RefreshSeconds: 2.5
+page4Lines:
+  - "               *Current world: {world}*"
+# Page 5
+page5Title: "[#f6f8ff]Page 5"
+page5DurationSeconds: 1.0
+page5RefreshSeconds: 2.5
+page5Lines:
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - "       *         Money: {money}$ / TPS: {tps}*"

@@ -6,13 +6,13 @@ Group #EditorRoot {
   Background: #0a0c10(0.82);
 
     Group #Panel {
-    Anchor: (Width: 900, Height: 620);
+    Anchor: (Width: 900, Height: 700);
     LayoutMode: Top;
     Padding: (Left: 22, Right: 22, Top: 18, Bottom: 18);
     Background: (TexturePath: "../Common/Popup.png", Border: 14);
 
     Group #Header {
-      Anchor: (Width: 856, Height: 140);
+      Anchor: (Width: 856, Height: 314);
       LayoutMode: Top;
       Padding: (Left: 6, Right: 6, Top: 2, Bottom: 8);
 
@@ -66,10 +66,116 @@ Group #EditorRoot {
         }
       }
 
+      Group #PageRow {
+        LayoutMode: Left;
+        Anchor: (Width: 856, Height: 42);
+        Padding: (Left: 12, Right: 12, Top: 4, Bottom: 4);
+
+        Label {
+          Text: "Pages";
+          Anchor: (Width: 90, Height: 30);
+          Style: (FontSize: 14, TextColor: #c8d2e3, VerticalAlignment: Center);
+        }
+
+        Group { Anchor: (Width: 8); }
+
+        $C.@SmallSecondaryTextButton #Page1Button { @Text = "Page 1"; Anchor: (Width: 95, Height: 30); }
+        Group { Anchor: (Width: 6); }
+        $C.@SmallSecondaryTextButton #Page2Button { @Text = "Page 2"; Anchor: (Width: 95, Height: 30); }
+        Group { Anchor: (Width: 6); }
+        $C.@SmallSecondaryTextButton #Page3Button { @Text = "Page 3"; Anchor: (Width: 95, Height: 30); }
+        Group { Anchor: (Width: 6); }
+        $C.@SmallSecondaryTextButton #Page4Button { @Text = "Page 4"; Anchor: (Width: 95, Height: 30); }
+        Group { Anchor: (Width: 6); }
+        $C.@SmallSecondaryTextButton #Page5Button { @Text = "Page 5"; Anchor: (Width: 95, Height: 30); }
+        Group { Anchor: (Width: 6); }
+        $C.@SmallSecondaryTextButton #Page6Button { @Text = "Page 6"; Anchor: (Width: 95, Height: 30); }
+      }
+
+      Group #PageRow2 {
+        LayoutMode: Left;
+        Anchor: (Width: 856, Height: 42);
+        Padding: (Left: 12, Right: 12, Top: 4, Bottom: 4);
+
+        Group { Anchor: (Width: 90); }
+
+        $C.@SmallSecondaryTextButton #Page7Button { @Text = "Page 7"; Anchor: (Width: 95, Height: 30); }
+        Group { Anchor: (Width: 6); }
+        $C.@SmallSecondaryTextButton #Page8Button { @Text = "Page 8"; Anchor: (Width: 95, Height: 30); }
+        Group { Anchor: (Width: 6); }
+        $C.@SmallSecondaryTextButton #Page9Button { @Text = "Page 9"; Anchor: (Width: 95, Height: 30); }
+        Group { Anchor: (Width: 6); }
+        $C.@SmallSecondaryTextButton #Page10Button { @Text = "Page 10"; Anchor: (Width: 95, Height: 30); }
+        Group { Anchor: (Width: 6); }
+        $C.@SmallSecondaryTextButton #Page11Button { @Text = "Page 11"; Anchor: (Width: 95, Height: 30); }
+        Group { Anchor: (Width: 6); }
+        $C.@SmallSecondaryTextButton #Page12Button { @Text = "Page 12"; Anchor: (Width: 95, Height: 30); }
+
+        Group { FlexWeight: 1; }
+
+        Label #ActivePageLabel {
+          @Text = "Page active: 1";
+          Anchor: (Width: 160, Height: 30);
+          Style: (FontSize: 13, TextColor: #9fc5ff, HorizontalAlignment: End, VerticalAlignment: Center);
+        }
+      }
+
+      Group #RotationRow {
+        LayoutMode: Left;
+        Anchor: (Width: 856, Height: 42);
+        Padding: (Left: 12, Right: 12, Top: 4, Bottom: 4);
+
+        $C.@CheckBoxWithLabel #AutoRotateToggle {
+          @Text = "Rotation auto";
+          Anchor: (Width: 190, Height: 30);
+        }
+
+        Group { Anchor: (Width: 12); }
+
+        Label {
+          Text: "Durée page (s)";
+          Anchor: (Width: 150, Height: 30);
+          Style: (FontSize: 13, TextColor: #c8d2e3, VerticalAlignment: Center);
+        }
+
+        $C.@TextField #PageDurationInput {
+          Anchor: (Width: 120, Height: 32);
+        }
+
+        Group { Anchor: (Width: 12); }
+
+        Label {
+          Text: "Refresh page (s)";
+          Anchor: (Width: 160, Height: 30);
+          Style: (FontSize: 13, TextColor: #c8d2e3, VerticalAlignment: Center);
+        }
+
+        $C.@TextField #PageRefreshInput {
+          Anchor: (Width: 120, Height: 32);
+        }
+      }
+
+      Group #WorldRow {
+        LayoutMode: Left;
+        Anchor: (Width: 856, Height: 42);
+        Padding: (Left: 12, Right: 12, Top: 4, Bottom: 4);
+
+        Label {
+          Text: "Worlds (comma)";
+          Anchor: (Width: 150, Height: 30);
+          Style: (FontSize: 13, TextColor: #c8d2e3, VerticalAlignment: Center);
+        }
+
+        $C.@TextField #PageWorldsInput {
+          FlexWeight: 1;
+          PlaceholderText: "Factions, dungeon, Skywars, etc";
+        }
+      }
+
     }
 
     Group #ScrollArea {
-      Anchor: (Width: 856, Height: 380);
+      Anchor: (Width: 856, Height: 260);
       LayoutMode: TopScrolling;
       Padding: (Left: 6, Right: 6, Top: 8, Bottom: 8);
       Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 12);

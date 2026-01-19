@@ -22,26 +22,48 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
     private final PlayerRef playerRef;
     private final BetterScoreBoardService service;
     private final BetterScoreBoardConfig config;
-    private final List<String> lines;
+    private final List<PageDraft> pages;
+    private int currentPageIndex;
+    private boolean rotationEnabled;
 
-    ScoreboardEditorPage(PlayerRef playerRef, BetterScoreBoardService service, BetterScoreBoardConfig config, List<String> lines) {
+    ScoreboardEditorPage(PlayerRef playerRef, BetterScoreBoardService service, BetterScoreBoardConfig config, List<BetterScoreBoardConfig.PageConfig> pages, int activePageIndex, boolean rotationEnabled) {
         super(playerRef, CustomPageLifetime.CanDismissOrCloseThroughInteraction, EditorEventData.CODEC);
         this.playerRef = playerRef;
         this.service = service;
         this.config = config;
-        this.lines = lines;
+        this.pages = new ArrayList<>();
+        if (pages != null) {
+            for (BetterScoreBoardConfig.PageConfig page : pages) {
+                this.pages.add(PageDraft.from(page));
+            }
+        }
+        while (this.pages.size() < BetterScoreBoardConfig.MAX_PAGES) {
+            this.pages.add(PageDraft.empty(this.pages.size() + 1));
+        }
+        this.currentPageIndex = Math.max(0, Math.min(BetterScoreBoardConfig.MAX_PAGES - 1, activePageIndex));
+        this.rotationEnabled = rotationEnabled;
     }
 
     @Override
     public void build(Ref<EntityStore> ref, UICommandBuilder builder, UIEventBuilder events, Store<EntityStore> store) {
         builder.append("Pages/GilloDaby_BetterScoreBoardEditor.ui");
         builder.set("#EditorRoot.Visible", true);
-        LineParts titleParts = parseLine(config.title());
-        builder.set("#EditorTitle.Text", titleParts.text());
+        PageDraft current = currentPage();
+        LineParts titleParts = parseLine(current.title);
+        builder.set("#EditorTitle.Text", "Scoreboard Editor - Page " + (currentPageIndex + 1));
         builder.set("#TitleInput.Value", titleParts.text());
         builder.set("#TitleColorHex.Value", titleParts.color().isEmpty() ? "#f6f8ff" : titleParts.color());
         builder.set("#PlaceholderHint.Text", "Placeholders: " + service.placeholdersLine());
         builder.set("#LimitHint.Text", "Max lines shown: " + Math.min(config.maxLines(), BetterScoreBoardHud.MAX_LINES));
+        builder.set("#ActivePageLabel.Text", "Page active: " + (currentPageIndex + 1));
+        builder.set("#AutoRotateToggle #CheckBox.Value", rotationEnabled);
+        builder.set("#PageDurationInput.Value", formatSeconds(current.durationSeconds));
+        builder.set("#PageRefreshInput.Value", formatSeconds(current.refreshSeconds));
+        builder.set("#PageWorldsInput.Value", formatWorlds(current.worlds));
+        for (int i = 0; i < BetterScoreBoardConfig.MAX_PAGES; i++) {
+            String selector = "#Page" + (i + 1) + "Button.Visible";
+            builder.set(selector, true);
+        }
 
         int max = Math.min(BetterScoreBoardHud.MAX_LINES, Math.max(1, config.maxLines()));
         for (int i = 0; i < BetterScoreBoardHud.MAX_LINES; i++) {
@@ -50,17 +72,43 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
             String colorSelector = "#Line" + (i + 1) + "Color.Value";
             boolean withinLimit = i < max;
             builder.set(rowSelector, withinLimit);
-            LineParts parts = i < lines.size() ? parseLine(lines.get(i)) : new LineParts("", "");
+            LineParts parts = i < current.lines.size() ? parseLine(current.lines.get(i)) : new LineParts("", "");
             builder.set(valueSelector, parts.text());
             builder.set(colorSelector, parts.color());
         }
 
         EventData apply = new EventData().append("Action", "apply");
         EventData save = new EventData().append("Action", "save");
+        List<EventData> pageEvents = new ArrayList<>();
+        for (int i = 1; i <= BetterScoreBoardConfig.MAX_PAGES; i++) {
+            pageEvents.add(new EventData().append("Action", "page" + i));
+        }
+        EventData toggleRotation = new EventData().append("RotationToggle", "CAT");
         apply.append("@Title", "#TitleInput.Value");
         save.append("@Title", "#TitleInput.Value");
+        for (EventData pageEvent : pageEvents) {
+            pageEvent.append("@Title", "#TitleInput.Value");
+        }
         apply.append("@TitleColorHex", "#TitleColorHex.Value");
         save.append("@TitleColorHex", "#TitleColorHex.Value");
+        for (EventData pageEvent : pageEvents) {
+            pageEvent.append("@TitleColorHex", "#TitleColorHex.Value");
+        }
+        apply.append("@PageDuration", "#PageDurationInput.Value");
+        save.append("@PageDuration", "#PageDurationInput.Value");
+        for (EventData pageEvent : pageEvents) {
+            pageEvent.append("@PageDuration", "#PageDurationInput.Value");
+        }
+        apply.append("@PageRefresh", "#PageRefreshInput.Value");
+        save.append("@PageRefresh", "#PageRefreshInput.Value");
+        for (EventData pageEvent : pageEvents) {
+            pageEvent.append("@PageRefresh", "#PageRefreshInput.Value");
+        }
+        apply.append("@PageWorlds", "#PageWorldsInput.Value");
+        save.append("@PageWorlds", "#PageWorldsInput.Value");
+        for (EventData pageEvent : pageEvents) {
+            pageEvent.append("@PageWorlds", "#PageWorldsInput.Value");
+        }
         for (int i = 0; i < BetterScoreBoardHud.MAX_LINES; i++) {
             String key = "@Line" + (i + 1);
             String selector = "#Line" + (i + 1) + "Input.Value";
@@ -68,25 +116,48 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
             String colorSelector = "#Line" + (i + 1) + "Color.Value";
             apply.append(key, selector);
             save.append(key, selector);
+            for (EventData pageEvent : pageEvents) {
+                pageEvent.append(key, selector);
+            }
             apply.append(colorHexKey, colorSelector);
             save.append(colorHexKey, colorSelector);
+            for (EventData pageEvent : pageEvents) {
+                pageEvent.append(colorHexKey, colorSelector);
+            }
         }
         events.addEventBinding(CustomUIEventBindingType.Activating, "#ApplyButton", apply, false);
         events.addEventBinding(CustomUIEventBindingType.Activating, "#SaveButton", save, false);
         events.addEventBinding(CustomUIEventBindingType.Activating, "#ReloadButton", new EventData().append("Action", "reload"), false);
         events.addEventBinding(CustomUIEventBindingType.Activating, "#CloseButton", new EventData().append("Action", "close"), false);
+        for (int i = 1; i <= BetterScoreBoardConfig.MAX_PAGES; i++) {
+            String selector = "#Page" + i + "Button";
+            events.addEventBinding(CustomUIEventBindingType.Activating, selector, pageEvents.get(i - 1), false);
+        }
+        events.addEventBinding(CustomUIEventBindingType.ValueChanged, "#AutoRotateToggle #CheckBox", toggleRotation, false);
     }
 
     @Override
     public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, EditorEventData data) {
-        if (data == null || data.action == null) {
+        if (data == null) {
+            return;
+        }
+        if (data.rotationToggle != null) {
+            rotationEnabled = !rotationEnabled;
+            refreshPageUI();
+            return;
+        }
+        if (data.action == null) {
             return;
         }
         EditorSubmission submission = collect(data);
         switch (data.action) {
-            case "apply" -> service.applyEditorUpdate(submission.title(), submission.lines(), submission.offsetRight(), submission.offsetTop(), false);
+            case "apply" -> {
+                updateDraft(submission);
+                service.applyEditorUpdate(currentPageIndex, buildUpdatedPages(), rotationEnabled, false);
+            }
             case "save" -> {
-                service.applyEditorUpdate(submission.title(), submission.lines(), submission.offsetRight(), submission.offsetTop(), true);
+                updateDraft(submission);
+                service.applyEditorUpdate(currentPageIndex, buildUpdatedPages(), rotationEnabled, true);
                 close();
             }
             case "reload" -> {
@@ -95,6 +166,11 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
             }
             case "close" -> close();
             default -> {
+                if (data.action.startsWith("page")) {
+                    updateDraft(submission);
+                    currentPageIndex = parsePageIndex(data.action);
+                    refreshPageUI();
+                }
             }
         }
     }
@@ -113,11 +189,15 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
         values.add(encodeLine(resolveColor(data.colorHex10), data.line10));
         values.add(encodeLine(resolveColor(data.colorHex11), data.line11));
         values.add(encodeLine(resolveColor(data.colorHex12), data.line12));
+        double durationSeconds = parseDoubleOrDefault(data.pageDuration, currentPage().durationSeconds);
+        double refreshSeconds = parseDoubleOrDefault(data.pageRefresh, currentPage().refreshSeconds);
+        List<String> worlds = parseWorlds(data.pageWorlds);
         return new EditorSubmission(
-                encodeTitle(resolveColor(data.titleColorHex), safe(data.title)),
-                values,
-                config.offsetRight(),
-                config.offsetTop()
+            encodeTitle(resolveColor(data.titleColorHex), safe(data.title)),
+            values,
+            durationSeconds,
+            refreshSeconds,
+            worlds
         );
     }
 
@@ -220,10 +300,151 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
         }
     }
 
+    private double parseDoubleOrDefault(String raw, double fallback) {
+        if (raw == null) {
+            return fallback;
+        }
+        try {
+            String cleaned = raw.trim();
+            if (cleaned.isEmpty()) {
+                return fallback;
+            }
+            return Double.parseDouble(cleaned);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+
+    private int parsePageIndex(String action) {
+        if (action == null || !action.startsWith("page")) {
+            return currentPageIndex;
+        }
+        try {
+            int index = Integer.parseInt(action.substring(4)) - 1;
+            return Math.max(0, Math.min(BetterScoreBoardConfig.MAX_PAGES - 1, index));
+        } catch (NumberFormatException e) {
+            return currentPageIndex;
+        }
+    }
+
+    private void updateDraft(EditorSubmission submission) {
+        PageDraft current = currentPage();
+        current.title = submission.title();
+        current.lines = trimTrailingEmpty(submission.lines());
+        current.durationSeconds = Math.max(1.0, submission.pageDurationSeconds());
+        current.refreshSeconds = Math.max(0.25, submission.pageRefreshSeconds());
+        current.worlds = submission.worlds();
+    }
+
+    private void refreshPageUI() {
+        UICommandBuilder builder = new UICommandBuilder();
+        UIEventBuilder events = new UIEventBuilder();
+        populatePageFields(builder);
+        sendUpdate(builder, events, false);
+    }
+
+    private void populatePageFields(UICommandBuilder builder) {
+        PageDraft current = currentPage();
+        LineParts titleParts = parseLine(current.title);
+        builder.set("#EditorTitle.Text", "Scoreboard Editor - Page " + (currentPageIndex + 1));
+        builder.set("#TitleInput.Value", titleParts.text());
+        builder.set("#TitleColorHex.Value", titleParts.color().isEmpty() ? "#f6f8ff" : titleParts.color());
+        builder.set("#ActivePageLabel.Text", "Page active: " + (currentPageIndex + 1));
+        builder.set("#AutoRotateToggle #CheckBox.Value", rotationEnabled);
+        builder.set("#PageDurationInput.Value", formatSeconds(current.durationSeconds));
+        builder.set("#PageRefreshInput.Value", formatSeconds(current.refreshSeconds));
+        builder.set("#PageWorldsInput.Value", formatWorlds(current.worlds));
+        int max = Math.min(BetterScoreBoardHud.MAX_LINES, Math.max(1, config.maxLines()));
+        for (int i = 0; i < BetterScoreBoardHud.MAX_LINES; i++) {
+            String rowSelector = "#Line" + (i + 1) + "Row.Visible";
+            String valueSelector = "#Line" + (i + 1) + "Input.Value";
+            String colorSelector = "#Line" + (i + 1) + "Color.Value";
+            boolean withinLimit = i < max;
+            builder.set(rowSelector, withinLimit);
+            LineParts parts = i < current.lines.size() ? parseLine(current.lines.get(i)) : new LineParts("", "");
+            builder.set(valueSelector, parts.text());
+            builder.set(colorSelector, parts.color());
+        }
+        for (int i = 0; i < BetterScoreBoardConfig.MAX_PAGES; i++) {
+            String selector = "#Page" + (i + 1) + "Button.Visible";
+            builder.set(selector, true);
+        }
+    }
+
+    private String formatSeconds(double seconds) {
+        return String.format("%.1f", seconds);
+    }
+
+    private String formatWorlds(List<String> worlds) {
+        if (worlds == null || worlds.isEmpty()) {
+            return "";
+        }
+        return String.join(", ", worlds);
+    }
+
+    private List<String> parseWorlds(String raw) {
+        List<String> values = new ArrayList<>();
+        if (raw == null) {
+            return values;
+        }
+        String[] tokens = raw.split(",");
+        for (String token : tokens) {
+            if (token == null) {
+                continue;
+            }
+            String trimmed = token.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            String lower = trimmed.toLowerCase();
+            if (!values.contains(lower)) {
+                values.add(lower);
+            }
+        }
+        return values;
+    }
+
+    private List<String> trimTrailingEmpty(List<String> lines) {
+        List<String> trimmed = new ArrayList<>(lines);
+        while (!trimmed.isEmpty()) {
+            String last = trimmed.get(trimmed.size() - 1);
+            if (last == null || last.isEmpty()) {
+                trimmed.remove(trimmed.size() - 1);
+            } else {
+                break;
+            }
+        }
+        return trimmed;
+    }
+
+    private List<BetterScoreBoardConfig.PageConfig> buildUpdatedPages() {
+        List<BetterScoreBoardConfig.PageConfig> updated = new ArrayList<>();
+        for (PageDraft draft : pages) {
+            List<String> sanitized = new ArrayList<>(draft.lines);
+            updated.add(new BetterScoreBoardConfig.PageConfig(
+                draft.title,
+                sanitized,
+                (long) Math.max(1_000, draft.durationSeconds * 1000),
+                (long) Math.max(250, draft.refreshSeconds * 1000),
+                draft.worlds
+            ));
+        }
+        return updated;
+    }
+
+    private PageDraft currentPage() {
+        return pages.get(Math.max(0, Math.min(pages.size() - 1, currentPageIndex)));
+    }
+
     static final class EditorEventData {
         static final BuilderCodec<EditorEventData> CODEC = BuilderCodec.builder(EditorEventData.class, EditorEventData::new)
                 .append(new KeyedCodec<>("Action", Codec.STRING), (e, v) -> e.action = v, e -> e.action).add()
                 .append(new KeyedCodec<>("@Title", Codec.STRING), (e, v) -> e.title = v, e -> e.title).add()
+                .append(new KeyedCodec<>("RotationToggle", Codec.STRING), (e, v) -> e.rotationToggle = v, e -> e.rotationToggle).add()
+                .append(new KeyedCodec<>("@PageDuration", Codec.STRING), (e, v) -> e.pageDuration = v, e -> e.pageDuration).add()
+                .append(new KeyedCodec<>("@PageRefresh", Codec.STRING), (e, v) -> e.pageRefresh = v, e -> e.pageRefresh).add()
+                .append(new KeyedCodec<>("@PageWorlds", Codec.STRING), (e, v) -> e.pageWorlds = v, e -> e.pageWorlds).add()
                 .append(new KeyedCodec<>("@Line1", Codec.STRING), (e, v) -> e.line1 = v, e -> e.line1).add()
                 .append(new KeyedCodec<>("@Line2", Codec.STRING), (e, v) -> e.line2 = v, e -> e.line2).add()
                 .append(new KeyedCodec<>("@Line3", Codec.STRING), (e, v) -> e.line3 = v, e -> e.line3).add()
@@ -254,6 +475,10 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
         private String action;
         private String title;
         private String titleColorHex;
+        private String rotationToggle;
+        private String pageDuration;
+        private String pageRefresh;
+        private String pageWorlds;
         private String line1;
         private String line2;
         private String line3;
@@ -278,13 +503,34 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
         private String colorHex10;
         private String colorHex11;
         private String colorHex12;
-        private String offsetRight;
-        private String offsetTop;
-
         EditorEventData() {
         }
     }
 
     private record LineParts(String color, String text) {}
-    private record EditorSubmission(String title, List<String> lines, int offsetRight, int offsetTop) {}
+    private record EditorSubmission(String title, List<String> lines, double pageDurationSeconds, double pageRefreshSeconds, List<String> worlds) {}
+
+    private static final class PageDraft {
+        String title;
+        List<String> lines;
+        double durationSeconds;
+        double refreshSeconds;
+        List<String> worlds;
+
+        PageDraft(String title, List<String> lines, double durationSeconds, double refreshSeconds, List<String> worlds) {
+            this.title = title != null ? title : "";
+            this.lines = lines != null ? lines : new ArrayList<>();
+            this.durationSeconds = durationSeconds;
+            this.refreshSeconds = refreshSeconds;
+            this.worlds = worlds != null ? worlds : new ArrayList<>();
+        }
+
+        static PageDraft from(BetterScoreBoardConfig.PageConfig page) {
+            return new PageDraft(page.title(), new ArrayList<>(page.lines()), page.durationMillis() / 1000.0, page.refreshMillis() / 1000.0, new ArrayList<>(page.worlds()));
+        }
+
+        static PageDraft empty(int pageNumber) {
+            return new PageDraft("Page " + pageNumber, new ArrayList<>(), 8.0, 2.5, new ArrayList<>());
+        }
+    }
 }

@@ -37,6 +37,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line1Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line1 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line1Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line1Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -67,6 +69,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line2Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line2Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line2Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -97,6 +101,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line3Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line3Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line3Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -127,6 +133,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line4Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line4 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line4Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line4Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -157,6 +165,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line5Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line5 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line5Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line5Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -187,6 +197,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line6Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line6 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line6Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line6Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -217,6 +229,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line7Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line7 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line7Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line7Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -247,6 +261,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line8Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line8 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line8Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line8Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -277,6 +293,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line9Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line9 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line9Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line9Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -307,6 +325,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line10Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line10 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line10Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line10Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -337,6 +357,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line11Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line11 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line11Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line11Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
@@ -367,6 +389,8 @@ Group #BoardRoot {
       Anchor: (Width: 260, Height: 18);
       LayoutMode: Left;
       Visible: false;
+      Group #Line12Icon { Anchor: (Width: 16, Height: 16); Background: "Tiles/TileEmpty.png"; Visible: false; }
+      Group { Anchor: (Width: 4); }
       Label #Line12 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line12Segment2 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }
       Label #Line12Segment3 { @Text = ""; Anchor: (Height: 18); Style: (FontSize: 14, TextColor: #f6f8ff, VerticalAlignment: Center); }

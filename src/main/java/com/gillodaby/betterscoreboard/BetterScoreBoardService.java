@@ -29,18 +29,30 @@ final class BetterScoreBoardService {
     private static final String PLACEHOLDERS = "{server}, {world}, {online}, {max_players}, {player}, {playtime}, {tps}, {balance}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}";
     private static final int DEFAULT_OFFSET_RIGHT = 1;
     private static final int DEFAULT_OFFSET_TOP = 300;
-    private static final long REFRESH_INTERVAL_MS = 1_000;
     private final Map<UUID, TrackedHud> huds = new ConcurrentHashMap<>();
     private final ScheduledExecutorService refresher;
+    private java.util.concurrent.ScheduledFuture<?> refreshTask;
     private BetterScoreBoardConfig config;
     private final String serverName;
     private final int configuredMaxPlayers;
-    private final List<String> mutableLines;
+    private final List<PageState> pages;
+    private int activePageIndex;
+    private boolean rotationEnabled;
+    private long nextRotationAtMs;
     private final EconomyBalanceSource economyBalanceSource;
 
     BetterScoreBoardService(BetterScoreBoardConfig config) {
         this.config = config;
-        this.mutableLines = new ArrayList<>(config.lines());
+        this.pages = new ArrayList<>();
+        for (BetterScoreBoardConfig.PageConfig pageConfig : config.pages()) {
+            this.pages.add(PageState.from(pageConfig));
+        }
+        while (this.pages.size() < BetterScoreBoardConfig.MAX_PAGES) {
+            this.pages.add(PageState.emptyPage(this.pages.size() + 1));
+        }
+        this.activePageIndex = clampPageIndex(config.activePage() - 1);
+        this.rotationEnabled = config.rotationEnabled();
+        this.nextRotationAtMs = System.currentTimeMillis() + currentPage().durationMs;
         this.economyBalanceSource = new EconomyBalanceSource();
         ThreadFactory factory = runnable -> {
             Thread t = new Thread(runnable, "BetterScoreBoard-Refresher");
@@ -66,7 +78,7 @@ final class BetterScoreBoardService {
 
     void start() {
         // Periodic, but self-contained: only refresh our own HUD instances via MultipleHUD.
-        refresher.scheduleAtFixedRate(this::refreshAll, REFRESH_INTERVAL_MS, REFRESH_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        scheduleRefresh();
     }
 
     void stop() {
@@ -76,6 +88,9 @@ final class BetterScoreBoardService {
             }
         }
         huds.clear();
+        if (refreshTask != null) {
+            refreshTask.cancel(false);
+        }
         refresher.shutdownNow();
     }
 
@@ -84,7 +99,7 @@ final class BetterScoreBoardService {
         if (player == null) {
             return;
         }
-        ensureLines();
+        ensurePages();
         PlayerRef ref = player.getPlayerRef();
         if (ref == null) {
             return;
@@ -107,7 +122,7 @@ final class BetterScoreBoardService {
         if (player == null) {
             return;
         }
-        ensureLines();
+        ensurePages();
         PlayerRef ref = player.getPlayerRef();
         if (ref == null || ref.getUuid() == null || ref.getReference() == null || ref.getReference().getStore() == null) {
             return;
@@ -116,7 +131,7 @@ final class BetterScoreBoardService {
         if (pageManager == null) {
             return;
         }
-        ScoreboardEditorPage page = new ScoreboardEditorPage(ref, this, config, new ArrayList<>(mutableLines));
+        ScoreboardEditorPage page = new ScoreboardEditorPage(ref, this, config, snapshotPages(), activePageIndex, rotationEnabled);
         pageManager.openCustomPage(ref.getReference(), ref.getReference().getStore(), page);
     }
 
@@ -177,6 +192,7 @@ final class BetterScoreBoardService {
     }
 
     private void refreshAll() {
+        maybeRotatePages();
         for (Map.Entry<UUID, TrackedHud> entry : huds.entrySet()) {
             UUID id = entry.getKey();
             TrackedHud tracked = entry.getValue();
@@ -232,19 +248,24 @@ final class BetterScoreBoardService {
     }
 
     private ScoreboardView buildView(Player player, int onlineCount) {
-        List<ScoreboardView.LineRender> formatted = formatLines(player, onlineCount);
-        LineParts titleParts = decodeLine(config.title());
+        PageState page = pageForPlayer(player);
+        if (page == null) {
+            return null;
+        }
+        List<ScoreboardView.LineRender> formatted = formatLines(page, player, onlineCount);
+        LineParts titleParts = decodeLine(page.title);
         return new ScoreboardView(titleParts.text(), titleParts.color(), "", DEFAULT_OFFSET_RIGHT, DEFAULT_OFFSET_TOP, List.copyOf(formatted), config.showDivider());
     }
 
-    private List<ScoreboardView.LineRender> formatLines(Player player, int onlineCount) {
+    private List<ScoreboardView.LineRender> formatLines(PageState page, Player player, int onlineCount) {
         List<ScoreboardView.LineRender> formatted = new ArrayList<>();
-        if (mutableLines.isEmpty()) {
+        List<String> currentLines = page != null ? page.lines : Collections.emptyList();
+        if (currentLines.isEmpty()) {
             return formatted;
         }
 
         int max = Math.min(config.maxLines(), BetterScoreBoardHud.MAX_LINES);
-        for (String template : mutableLines) {
+        for (String template : currentLines) {
             if (template == null) {
                 continue;
             }
@@ -257,6 +278,48 @@ final class BetterScoreBoardService {
             }
         }
         return formatted;
+    }
+
+    private PageState pageForPlayer(Player player) {
+        if (player == null) {
+            return currentPage();
+        }
+        PageState current = currentPage();
+        String world = normalizedWorld(player);
+        if (pageVisibleInWorld(current, world)) {
+            return current;
+        }
+        PageState match = firstPageForWorld(world, true);
+        if (match != null) {
+            return match;
+        }
+        return firstPageForWorld(world, false);
+    }
+
+    private PageState firstPageForWorld(String world, boolean requireContent) {
+        for (PageState page : pages) {
+            if (!pageVisibleInWorld(page, world)) {
+                continue;
+            }
+            if (requireContent && !pageHasContent(page)) {
+                continue;
+            }
+            return page;
+        }
+        return null;
+    }
+
+    private boolean pageVisibleInWorld(PageState page, String world) {
+        if (page == null) {
+            return false;
+        }
+        if (page.worlds == null || page.worlds.isEmpty()) {
+            return true;
+        }
+        if (world == null || world.isEmpty()) {
+            return false;
+        }
+        return page.worlds.contains(world);
     }
 
     private String applyPlaceholders(String template, Player player, int onlineCount) {
@@ -300,58 +363,74 @@ final class BetterScoreBoardService {
 
     // --- mutable lines API for commands ---
     List<String> lines() {
-        return Collections.unmodifiableList(mutableLines);
+        return Collections.unmodifiableList(currentPage().lines);
     }
 
     void setLine(int index, String text) {
         ensureSize(index + 1);
-        mutableLines.set(index, text);
+        currentPage().lines.set(index, text);
         refreshAll();
     }
 
     boolean addLine(String text) {
-        if (mutableLines.size() >= BetterScoreBoardHud.MAX_LINES) {
+        if (currentPage().lines.size() >= BetterScoreBoardHud.MAX_LINES) {
             return false;
         }
-        mutableLines.add(text);
+        currentPage().lines.add(text);
         refreshAll();
         return true;
     }
 
     boolean removeLine(int index) {
-        if (index < 0 || index >= mutableLines.size()) {
+        if (index < 0 || index >= currentPage().lines.size()) {
             return false;
         }
-        mutableLines.remove(index);
+        currentPage().lines.remove(index);
         refreshAll();
         return true;
     }
 
     void saveConfig() {
-        config = config.withLines(mutableLines);
+        config = config.withPages(snapshotPages(), activePageIndex + 1, rotationEnabled);
         BetterScoreBoardConfig.persist(config);
         refreshAll();
     }
 
     void reloadConfig() {
         this.config = BetterScoreBoardConfig.load(config.dataDir());
-        mutableLines.clear();
-        mutableLines.addAll(config.lines());
+        pages.clear();
+        for (BetterScoreBoardConfig.PageConfig pageConfig : config.pages()) {
+            pages.add(PageState.from(pageConfig));
+        }
+        while (pages.size() < BetterScoreBoardConfig.MAX_PAGES) {
+            pages.add(PageState.emptyPage(pages.size() + 1));
+        }
+        activePageIndex = clampPageIndex(config.activePage() - 1);
+        rotationEnabled = config.rotationEnabled();
+        nextRotationAtMs = System.currentTimeMillis() + currentPage().durationMs;
+        scheduleRefresh();
         refreshAll();
     }
 
-    void applyEditorUpdate(String requestedTitle, List<String> requestedLines, int offsetRight, int offsetTop, boolean persist) {
-        List<String> sanitized = sanitizeLines(requestedLines);
-        if (sanitized.isEmpty()) {
-            sanitized = new ArrayList<>(mutableLines.isEmpty() ? config.lines() : mutableLines);
+    void applyEditorUpdate(int pageIndex, List<BetterScoreBoardConfig.PageConfig> updatedPages, boolean updatedRotationEnabled, boolean persist) {
+        if (updatedPages == null || updatedPages.isEmpty()) {
+            return;
         }
-        mutableLines.clear();
-        mutableLines.addAll(sanitized);
-        String title = sanitizeTitle(requestedTitle);
-        config = config.withTitleAndLines(title, mutableLines);
+        pages.clear();
+        for (BetterScoreBoardConfig.PageConfig pageConfig : updatedPages) {
+            pages.add(PageState.from(pageConfig));
+        }
+        while (pages.size() < BetterScoreBoardConfig.MAX_PAGES) {
+            pages.add(PageState.emptyPage(pages.size() + 1));
+        }
+        activePageIndex = clampPageIndex(pageIndex);
+        rotationEnabled = updatedRotationEnabled;
+        nextRotationAtMs = System.currentTimeMillis() + currentPage().durationMs;
+        config = config.withPages(snapshotPages(), activePageIndex + 1, rotationEnabled);
         if (persist) {
             BetterScoreBoardConfig.persist(config);
         }
+        scheduleRefresh();
         refreshAll();
     }
 
@@ -376,14 +455,19 @@ final class BetterScoreBoardService {
     }
 
     private void ensureSize(int size) {
-        while (mutableLines.size() < size) {
-            mutableLines.add("");
+        while (currentPage().lines.size() < size) {
+            currentPage().lines.add("");
         }
     }
 
-    private void ensureLines() {
-        if (mutableLines.isEmpty()) {
-            mutableLines.addAll(config.lines());
+    private void ensurePages() {
+        if (pages.isEmpty()) {
+            for (BetterScoreBoardConfig.PageConfig pageConfig : config.pages()) {
+                pages.add(PageState.from(pageConfig));
+            }
+        }
+        while (pages.size() < BetterScoreBoardConfig.MAX_PAGES) {
+            pages.add(PageState.emptyPage(pages.size() + 1));
         }
     }
 
@@ -611,7 +695,7 @@ final class BetterScoreBoardService {
 
     private String sanitizeTitle(String requestedTitle) {
         if (requestedTitle == null || requestedTitle.trim().isEmpty()) {
-            return config.title();
+            return currentPage().title;
         }
         return requestedTitle.trim();
     }
@@ -633,6 +717,10 @@ final class BetterScoreBoardService {
             return "world";
         }
         return world.getName();
+    }
+
+    private String normalizedWorld(Player player) {
+        return safeWorld(player).toLowerCase();
     }
 
     // Bridge to the optional EconomyPlugin so {balance}/{money} can be resolved when available.
@@ -758,6 +846,108 @@ final class BetterScoreBoardService {
             this.joinedAtMs = System.currentTimeMillis();
             this.lastTickTimeMs = System.currentTimeMillis();
             this.lastWorldTick = player != null && player.getWorld() != null ? player.getWorld().getTick() : 0;
+        }
+    }
+
+    private void scheduleRefresh() {
+        long interval = Math.max(250L, currentPage().refreshMs);
+        if (refreshTask != null) {
+            refreshTask.cancel(false);
+        }
+        refreshTask = refresher.scheduleAtFixedRate(this::refreshAll, interval, interval, TimeUnit.MILLISECONDS);
+    }
+
+    private PageState currentPage() {
+        return pages.get(clampPageIndex(activePageIndex));
+    }
+
+    private int clampPageIndex(int index) {
+        return Math.max(0, Math.min(pages.size() - 1, index));
+    }
+
+    private List<BetterScoreBoardConfig.PageConfig> snapshotPages() {
+        List<BetterScoreBoardConfig.PageConfig> snapshot = new ArrayList<>();
+        for (PageState page : pages) {
+            snapshot.add(page.toConfig());
+        }
+        return snapshot;
+    }
+
+    private void maybeRotatePages() {
+        if (!rotationEnabled || pages.isEmpty()) {
+            return;
+        }
+        List<Integer> candidates = rotationCandidates();
+        if (candidates.size() < 2) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now < nextRotationAtMs) {
+            return;
+        }
+        int currentIndex = clampPageIndex(activePageIndex);
+        int nextIndex = nextCandidateIndex(candidates, currentIndex);
+        activePageIndex = nextIndex;
+        nextRotationAtMs = now + currentPage().durationMs;
+        scheduleRefresh();
+    }
+
+    private List<Integer> rotationCandidates() {
+        List<Integer> candidates = new ArrayList<>();
+        for (int i = 0; i < pages.size(); i++) {
+            if (pageHasContent(pages.get(i))) {
+                candidates.add(i);
+            }
+        }
+        if (candidates.isEmpty()) {
+            candidates.add(clampPageIndex(activePageIndex));
+        }
+        return candidates;
+    }
+
+    private boolean pageHasContent(PageState page) {
+        for (String line : page.lines) {
+            if (line != null && !line.trim().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int nextCandidateIndex(List<Integer> candidates, int currentIndex) {
+        int pos = candidates.indexOf(currentIndex);
+        if (pos < 0) {
+            return candidates.get(0);
+        }
+        int nextPos = (pos + 1) % candidates.size();
+        return candidates.get(nextPos);
+    }
+
+    private static final class PageState {
+        String title;
+        List<String> lines;
+        long durationMs;
+        long refreshMs;
+        List<String> worlds;
+
+        PageState(String title, List<String> lines, long durationMs, long refreshMs, List<String> worlds) {
+            this.title = title != null ? title : "";
+            this.lines = lines != null ? lines : new ArrayList<>();
+            this.durationMs = durationMs;
+            this.refreshMs = refreshMs;
+            this.worlds = worlds != null ? worlds : new ArrayList<>();
+        }
+
+        static PageState from(BetterScoreBoardConfig.PageConfig pageConfig) {
+            return new PageState(pageConfig.title(), new ArrayList<>(pageConfig.lines()), pageConfig.durationMillis(), pageConfig.refreshMillis(), new ArrayList<>(pageConfig.worlds()));
+        }
+
+        static PageState emptyPage(int pageNumber) {
+            return new PageState("Page " + pageNumber, new ArrayList<>(), 8_000L, 2500L, new ArrayList<>());
+        }
+
+        BetterScoreBoardConfig.PageConfig toConfig() {
+            return new BetterScoreBoardConfig.PageConfig(title, Collections.unmodifiableList(new ArrayList<>(lines)), durationMs, refreshMs, Collections.unmodifiableList(new ArrayList<>(worlds)));
         }
     }
 }
