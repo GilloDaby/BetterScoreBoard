@@ -12,7 +12,8 @@
     "Buuz135:MultipleHUD": "*"
   },
   "OptionalDependencies": {
-    "Ryukazan:EconomyPlugin": "*"
+    "Ryukazan:EconomyPlugin": "*",
+    "LuckPerms:LuckPerms": "*"
   },
   "DisabledByDefault": false,
   "Main": "com.gillodaby.betterscoreboard.BetterScoreBoardPlugin",

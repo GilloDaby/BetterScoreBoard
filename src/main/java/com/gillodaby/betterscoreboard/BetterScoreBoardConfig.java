@@ -26,8 +26,9 @@ final class BetterScoreBoardConfig {
     private final int offsetRight;
     private final int offsetTop;
     private final boolean dividerVisible;
+    private final boolean logoVisible;
 
-    private BetterScoreBoardConfig(String title, String logoTexturePath, int maxLines, long refreshMillis, List<String> lines, List<PageConfig> pages, boolean rotationEnabled, int activePage, Path dataDir, int offsetRight, int offsetTop, boolean dividerVisible) {
+    private BetterScoreBoardConfig(String title, String logoTexturePath, int maxLines, long refreshMillis, List<String> lines, List<PageConfig> pages, boolean rotationEnabled, int activePage, Path dataDir, int offsetRight, int offsetTop, boolean dividerVisible, boolean logoVisible) {
         this.title = title;
         this.logoTexturePath = logoTexturePath;
         this.maxLines = maxLines;
@@ -40,6 +41,7 @@ final class BetterScoreBoardConfig {
         this.offsetRight = offsetRight;
         this.offsetTop = offsetTop;
         this.dividerVisible = dividerVisible;
+        this.logoVisible = logoVisible;
     }
 
     String title() {
@@ -90,6 +92,10 @@ final class BetterScoreBoardConfig {
         return dividerVisible;
     }
 
+    boolean logoVisible() {
+        return logoVisible;
+    }
+
     PageConfig page(int index) {
         if (pages == null || pages.isEmpty()) {
             return null;
@@ -122,6 +128,7 @@ final class BetterScoreBoardConfig {
         int offsetRight = defaults.offsetRight;
         int offsetTop = defaults.offsetTop;
         boolean dividerVisible = defaults.dividerVisible;
+        boolean logoVisible = defaults.logoVisible;
         boolean rotationEnabled = defaults.rotationEnabled;
         int activePage = defaults.activePage;
 
@@ -251,6 +258,11 @@ final class BetterScoreBoardConfig {
                             dividerVisible = Boolean.parseBoolean(value);
                         }
                     }
+                    case "logoVisible", "showLogo" -> {
+                        if (!value.isEmpty()) {
+                            logoVisible = Boolean.parseBoolean(value);
+                        }
+                    }
                     default -> {
                         int pageTitleIndex = parsePageTitleIndex(key);
                         if (pageTitleIndex >= 0 && pageTitleIndex < MAX_PAGES) {
@@ -325,7 +337,8 @@ final class BetterScoreBoardConfig {
             dataDir,
             offsetRight,
             offsetTop,
-            dividerVisible
+            dividerVisible,
+            logoVisible
         );
     }
 
@@ -360,6 +373,7 @@ final class BetterScoreBoardConfig {
             dataDir,
             24,
             140,
+            true,
             true
         );
     }
@@ -387,6 +401,8 @@ final class BetterScoreBoardConfig {
         lines.add("maxLines: " + defaults.maxLines);
         lines.add("# Show the divider line below the title");
         lines.add("dividerVisible: " + defaults.dividerVisible);
+        lines.add("# Show the logo image above the title");
+        lines.add("logoVisible: " + defaults.logoVisible);
         lines.add("# Rotation of multiple pages");
         lines.add("rotationEnabled: " + defaults.rotationEnabled);
         lines.add("activePage: " + defaults.activePage);
@@ -396,6 +412,7 @@ final class BetterScoreBoardConfig {
         lines.add("# {online} -> number of tracked players");
         lines.add("# {max_players} -> server max players");
         lines.add("# {player} -> player display name");
+        lines.add("# {rank} -> LuckPerms primary group (optional)");
         lines.add("# {playtime} -> time since join");
         lines.add("# {tps} -> server TPS (approx)");
         lines.add("# {money} -> uses EconomyPlugin when available");
@@ -438,7 +455,8 @@ final class BetterScoreBoardConfig {
                 dataDir,
                 offsetRight,
             offsetTop,
-            dividerVisible
+            dividerVisible,
+            logoVisible
         );
     }
 
@@ -459,7 +477,8 @@ final class BetterScoreBoardConfig {
                 dataDir,
                 offsetRight,
             offsetTop,
-            dividerVisible
+            dividerVisible,
+            logoVisible
         );
     }
 
@@ -476,7 +495,8 @@ final class BetterScoreBoardConfig {
                 dataDir,
                 Math.max(0, newOffsetRight),
             Math.max(0, newOffsetTop),
-            dividerVisible
+            dividerVisible,
+            logoVisible
         );
     }
 
@@ -493,6 +513,25 @@ final class BetterScoreBoardConfig {
                 dataDir,
                 offsetRight,
                 offsetTop,
+                visible,
+                logoVisible
+        );
+    }
+
+    BetterScoreBoardConfig withLogoVisible(boolean visible) {
+        return new BetterScoreBoardConfig(
+                title,
+                logoTexturePath,
+                maxLines,
+                refreshMillis,
+                lines,
+                pages,
+                rotationEnabled,
+                activePage,
+                dataDir,
+                offsetRight,
+                offsetTop,
+                dividerVisible,
                 visible
         );
     }
@@ -516,7 +555,8 @@ final class BetterScoreBoardConfig {
                 dataDir,
                 offsetRight,
                 offsetTop,
-                dividerVisible
+            dividerVisible,
+            logoVisible
         );
     }
 
@@ -533,11 +573,12 @@ final class BetterScoreBoardConfig {
         lines.add("offsetRight: " + cfg.offsetRight);
         lines.add("offsetTop: " + cfg.offsetTop);
         lines.add("dividerVisible: " + cfg.dividerVisible);
+        lines.add("logoVisible: " + cfg.logoVisible);
         lines.add("# Rotation of multiple pages");
         lines.add("rotationEnabled: " + cfg.rotationEnabled);
         lines.add("activePage: " + cfg.activePage);
         lines.add("# Lines to render from top to bottom. Available placeholders:");
-        lines.add("# {server}, {world}, {online}, {max_players}, {player}, {playtime}, {tps}, {money}, {balance}");
+        lines.add("# {server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps}, {money}, {balance}");
         for (int i = 0; i < cfg.pages.size(); i++) {
             PageConfig page = cfg.pages.get(i);
             int pageNumber = i + 1;

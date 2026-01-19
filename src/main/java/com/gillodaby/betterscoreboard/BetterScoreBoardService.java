@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 final class BetterScoreBoardService {
 
-    private static final String PLACEHOLDERS = "{server}, {world}, {online}, {max_players}, {player}, {playtime}, {tps}, {balance}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}";
+    private static final String PLACEHOLDERS = "{server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps}, {balance}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}";
     private static final int DEFAULT_OFFSET_RIGHT = 1;
     private static final int DEFAULT_OFFSET_TOP = 300;
     private final Map<UUID, TrackedHud> huds = new ConcurrentHashMap<>();
@@ -40,6 +40,7 @@ final class BetterScoreBoardService {
     private boolean rotationEnabled;
     private long nextRotationAtMs;
     private final EconomyBalanceSource economyBalanceSource;
+    private final LuckPermsRankSource luckPermsRankSource;
 
     BetterScoreBoardService(BetterScoreBoardConfig config) {
         this.config = config;
@@ -54,6 +55,7 @@ final class BetterScoreBoardService {
         this.rotationEnabled = config.rotationEnabled();
         this.nextRotationAtMs = System.currentTimeMillis() + currentPage().durationMs;
         this.economyBalanceSource = new EconomyBalanceSource();
+        this.luckPermsRankSource = new LuckPermsRankSource();
         ThreadFactory factory = runnable -> {
             Thread t = new Thread(runnable, "BetterScoreBoard-Refresher");
             t.setDaemon(true);
@@ -254,7 +256,9 @@ final class BetterScoreBoardService {
         }
         List<ScoreboardView.LineRender> formatted = formatLines(page, player, onlineCount);
         LineParts titleParts = decodeLine(page.title);
-        return new ScoreboardView(titleParts.text(), titleParts.color(), "", DEFAULT_OFFSET_RIGHT, DEFAULT_OFFSET_TOP, List.copyOf(formatted), config.showDivider());
+        boolean showLogo = config.logoVisible();
+        String logoPath = showLogo ? config.logoTexturePath() : "";
+        return new ScoreboardView(titleParts.text(), titleParts.color(), logoPath, showLogo, DEFAULT_OFFSET_RIGHT, DEFAULT_OFFSET_TOP, List.copyOf(formatted), config.showDivider());
     }
 
     private List<ScoreboardView.LineRender> formatLines(PageState page, Player player, int onlineCount) {
@@ -326,6 +330,7 @@ final class BetterScoreBoardService {
         String result = template;
         result = result.replace("{server}", serverName);
         result = result.replace("{player}", safePlayerName(player));
+        result = result.replace("{rank}", formatRank(player));
         result = result.replace("{world}", safeWorld(player));
         result = result.replace("{online}", Integer.toString(Math.max(onlineCount, 0)));
         result = result.replace("{max_players}", Integer.toString(resolveMaxPlayers(onlineCount)));
@@ -450,6 +455,22 @@ final class BetterScoreBoardService {
         return true;
     }
 
+    boolean logoVisible() {
+        return config.logoVisible();
+    }
+
+    boolean setLogoVisible(boolean visible, boolean persist) {
+        if (config.logoVisible() == visible) {
+            return false;
+        }
+        config = config.withLogoVisible(visible);
+        if (persist) {
+            BetterScoreBoardConfig.persist(config);
+        }
+        refreshAll();
+        return true;
+    }
+
     String placeholdersLine() {
         return PLACEHOLDERS;
     }
@@ -529,6 +550,11 @@ final class BetterScoreBoardService {
     private String formatBalance(Player player) {
         long balance = economyBalanceSource.getBalance(player);
         return Long.toString(balance);
+    }
+
+    private String formatRank(Player player) {
+        String rank = luckPermsRankSource.getRank(player);
+        return rank != null ? rank : "";
     }
 
     private String formatGameMode(Player player) {
@@ -723,6 +749,7 @@ final class BetterScoreBoardService {
         return safeWorld(player).toLowerCase();
     }
 
+
     // Bridge to the optional EconomyPlugin so {balance}/{money} can be resolved when available.
     private static final class EconomyBalanceSource {
 
@@ -826,6 +853,223 @@ final class BetterScoreBoardService {
             try {
                 return field.get(component);
             } catch (IllegalAccessException ignored) {
+                return null;
+            }
+        }
+    }
+
+    // Optional LuckPerms integration for {rank} (prefix or primary group)
+    private static final class LuckPermsRankSource {
+
+        private static final String PROVIDER_CLASS = "net.luckperms.api.LuckPermsProvider";
+
+        private volatile Object apiInstance;
+        private volatile Object userManager;
+        private volatile Method providerGet;
+        private volatile Method apiGetUserManager;
+        private volatile Method userManagerGetUser;
+        private volatile Method userGetPrimaryGroup;
+        private volatile Method userManagerLoadUser;
+        private volatile Method apiGetContextManager;
+        private volatile Method contextManagerGetQueryOptions;
+
+        LuckPermsRankSource() {
+            refresh();
+        }
+
+        String getRank(Player player) {
+            if (player == null || player.getUuid() == null) {
+                return "";
+            }
+            ensureInitialized();
+            Object manager = userManager;
+            Method getUser = userManagerGetUser;
+            Method getPrimaryGroup = userGetPrimaryGroup;
+            if (manager == null || getUser == null) {
+                return "";
+            }
+            Object user = invoke(getUser, manager, player.getUuid());
+            if (user == null && userManagerLoadUser != null) {
+                Object future = invoke(userManagerLoadUser, manager, player.getUuid());
+                Object loaded = joinFuture(future);
+                if (loaded != null) {
+                    user = loaded;
+                }
+            }
+            if (user == null) {
+                return "";
+            }
+            String prefix = resolvePrefix(user);
+            if (prefix != null && !prefix.isEmpty()) {
+                return prefix;
+            }
+            if (getPrimaryGroup == null) {
+                userGetPrimaryGroup = resolvePrimaryGroup(user);
+                getPrimaryGroup = userGetPrimaryGroup;
+            }
+            if (getPrimaryGroup == null) {
+                return "";
+            }
+            Object group = invoke(getPrimaryGroup, user);
+            return group != null ? group.toString() : "";
+        }
+
+        private void ensureInitialized() {
+            if (apiInstance != null && userManager != null && userManagerGetUser != null) {
+                return;
+            }
+            refresh();
+        }
+
+        private void refresh() {
+            try {
+                Class<?> provider = Class.forName(PROVIDER_CLASS);
+                providerGet = provider.getMethod("get");
+                apiInstance = providerGet.invoke(null);
+                if (apiInstance == null) {
+                    return;
+                }
+                apiGetUserManager = apiInstance.getClass().getMethod("getUserManager");
+                userManager = apiGetUserManager.invoke(apiInstance);
+                if (userManager == null) {
+                    return;
+                }
+                userManagerGetUser = userManager.getClass().getMethod("getUser", java.util.UUID.class);
+                try {
+                    userManagerLoadUser = userManager.getClass().getMethod("loadUser", java.util.UUID.class);
+                } catch (Exception ignored) {
+                    userManagerLoadUser = null;
+                }
+                try {
+                    apiGetContextManager = apiInstance.getClass().getMethod("getContextManager");
+                } catch (Exception ignored) {
+                    apiGetContextManager = null;
+                }
+            } catch (Exception ignored) {
+                return;
+            }
+            userGetPrimaryGroup = null;
+        }
+
+        private Object invoke(Method method, Object target, Object... args) {
+            try {
+                return method.invoke(target, args);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private Object joinFuture(Object future) {
+            if (future == null) {
+                return null;
+            }
+            try {
+                Method join = future.getClass().getMethod("join");
+                return join.invoke(future);
+            } catch (Exception ignored) {
+            }
+            try {
+                Method get = future.getClass().getMethod("get");
+                return get.invoke(future);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private String resolvePrefix(Object user) {
+            if (user == null) {
+                return "";
+            }
+            Object cachedData = invokeMethodByName(user, "getCachedData");
+            if (cachedData == null) {
+                return "";
+            }
+            Object meta = resolveMetaData(user, cachedData);
+            if (meta == null) {
+                return "";
+            }
+            Object prefix = invokeMethodByName(meta, "getPrefix");
+            return prefix != null ? prefix.toString() : "";
+        }
+
+        private Object resolveMetaData(Object user, Object cachedData) {
+            if (cachedData == null) {
+                return null;
+            }
+            Object meta = invokeMethodByName(cachedData, "getMetaData");
+            if (meta != null) {
+                return meta;
+            }
+            Method metaWithOptions = findSingleParamMethod(cachedData, "getMetaData");
+            if (metaWithOptions == null) {
+                return null;
+            }
+            Object queryOptions = resolveQueryOptions(user);
+            if (queryOptions == null) {
+                return null;
+            }
+            return invoke(metaWithOptions, cachedData, queryOptions);
+        }
+
+        private Object resolveQueryOptions(Object user) {
+            if (apiInstance == null || apiGetContextManager == null || user == null) {
+                return null;
+            }
+            Object contextManager = invoke(apiGetContextManager, apiInstance);
+            if (contextManager == null) {
+                return null;
+            }
+            if (contextManagerGetQueryOptions == null) {
+                contextManagerGetQueryOptions = findSingleParamMethod(contextManager, "getQueryOptions");
+            }
+            if (contextManagerGetQueryOptions == null) {
+                return null;
+            }
+            Object optional = invoke(contextManagerGetQueryOptions, contextManager, user);
+            if (optional == null) {
+                return null;
+            }
+            Object value = invokeMethodByName(optional, "orElse");
+            if (value != null) {
+                return value;
+            }
+            return invokeMethodByName(optional, "orElseGet");
+        }
+
+        private Object invokeMethodByName(Object target, String name) {
+            if (target == null || name == null) {
+                return null;
+            }
+            try {
+                Method method = target.getClass().getMethod(name);
+                return method.invoke(target);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private Method findSingleParamMethod(Object target, String name) {
+            if (target == null || name == null) {
+                return null;
+            }
+            for (Method method : target.getClass().getMethods()) {
+                if (!method.getName().equals(name)) {
+                    continue;
+                }
+                if (method.getParameterCount() == 1) {
+                    return method;
+                }
+            }
+            return null;
+        }
+
+        private Method resolvePrimaryGroup(Object user) {
+            if (user == null) {
+                return null;
+            }
+            try {
+                return user.getClass().getMethod("getPrimaryGroup");
+            } catch (Exception ignored) {
                 return null;
             }
         }

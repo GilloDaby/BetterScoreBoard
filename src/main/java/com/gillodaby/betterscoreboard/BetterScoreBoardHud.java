@@ -50,9 +50,8 @@ final class BetterScoreBoardHud extends CustomUIHud {
         builder.set("#BoardRoot.Visible", true);
         builder.set("#Divider.Visible", view.dividerVisible());
         builder.set("#BoardTitle.Text", view.title());
-        if (view.logoTexturePath() != null && !view.logoTexturePath().isEmpty()) {
-            builder.set("#BoardLogo.TexturePath", view.logoTexturePath());
-        }
+        builder.set("#BoardLogo.Visible", view.logoVisible());
+        // Logo texture is static in UI; only visibility is toggled at runtime.
         if (view.titleColor() != null && !view.titleColor().isEmpty()) {
             builder.set("#BoardTitle.Style.TextColor", view.titleColor());
         } else {

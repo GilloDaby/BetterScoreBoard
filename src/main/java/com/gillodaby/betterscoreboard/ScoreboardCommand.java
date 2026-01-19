@@ -130,6 +130,17 @@ final class ScoreboardCommand extends AbstractCommand {
         divider.requirePermission("betterscoreboard.divider");
         addSubCommand(divider);
 
+        // logo
+        AbstractCommand logo = new AbstractCommand("logo", "Toggle the logo globally") {
+            @Override
+            protected CompletableFuture<Void> execute(CommandContext ctx) {
+                return handleLogo(ctx);
+            }
+        };
+        logo.setAllowsExtraArguments(true);
+        logo.requirePermission("betterscoreboard.logo");
+        addSubCommand(logo);
+
         // help
         AbstractCommand help = new AbstractCommand("help", "Show help") {
             @Override
@@ -273,6 +284,32 @@ final class ScoreboardCommand extends AbstractCommand {
         return CompletableFuture.completedFuture(null);
     }
 
+    private CompletableFuture<Void> handleLogo(CommandContext ctx) {
+        if (!ctx.isPlayer() || !ctx.senderAs(Player.class).hasPermission("betterscoreboard.logo")) {
+            ctx.sendMessage(service.text("[BetterScoreBoard] Missing permission: betterscoreboard.logo"));
+            return CompletableFuture.completedFuture(null);
+        }
+        String targetArg = parseTextAfter(ctx.getInputString(), 2).trim();
+        boolean currentVisible = service.logoVisible();
+        boolean targetVisible = currentVisible;
+        if (targetArg.isEmpty()) {
+            targetVisible = !currentVisible;
+        } else if (targetArg.equalsIgnoreCase("on") || targetArg.equalsIgnoreCase("show")) {
+            targetVisible = true;
+        } else if (targetArg.equalsIgnoreCase("off") || targetArg.equalsIgnoreCase("hide")) {
+            targetVisible = false;
+        } else if (targetArg.equalsIgnoreCase("toggle")) {
+            targetVisible = !currentVisible;
+        } else {
+            ctx.sendMessage(service.text("Usage: /scoreboard logo [on|off|toggle]"));
+            return CompletableFuture.completedFuture(null);
+        }
+        boolean changed = service.setLogoVisible(targetVisible, true);
+        String state = targetVisible ? "visible" : "hidden";
+        ctx.sendMessage(service.text(changed ? "Logo is now " + state + "." : "Logo is already " + state + "."));
+        return CompletableFuture.completedFuture(null);
+    }
+
     private CompletableFuture<Void> handleHelp(CommandContext ctx) {
         if (!ctx.isPlayer() || !ctx.senderAs(Player.class).hasPermission("betterscoreboard.help")) {
             ctx.sendMessage(service.text("[BetterScoreBoard] Permission permission: betterscoreboard.help"));
@@ -288,6 +325,7 @@ final class ScoreboardCommand extends AbstractCommand {
             "/scoreboard remove <index>",
             "/scoreboard save",
             "/scoreboard divider [on|off|toggle]",
+            "/scoreboard logo [on|off|toggle]",
             "/scoreboard show",
             "/scoreboard off",
             "/scoreboard help",
