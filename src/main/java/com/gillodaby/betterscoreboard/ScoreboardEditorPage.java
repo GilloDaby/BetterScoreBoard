@@ -53,9 +53,13 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
         builder.set("#EditorTitle.Text", "Scoreboard Editor - Page " + (currentPageIndex + 1));
         builder.set("#TitleInput.Value", titleParts.text());
         builder.set("#TitleColorHex.Value", titleParts.color().isEmpty() ? "#f6f8ff" : titleParts.color());
-        builder.set("#PlaceholderHint.Text", "Placeholders: " + service.placeholdersLine());
+        builder.set("#PlaceholderHint.Text",
+            "Placeholders: {server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps},\n" +
+            "{uuid}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z},\n" +
+            "Optional: {rank}, {balance}, {money}, {faction}, {faction_rank}, {faction_tag}");
+        builder.set("#PlaceholderOptional.Text", "More in coming updates!");
         builder.set("#LimitHint.Text", "Max lines shown: " + Math.min(config.maxLines(), BetterScoreBoardHud.MAX_LINES));
-        builder.set("#ActivePageLabel.Text", "Page active: " + (currentPageIndex + 1));
+        builder.set("#ActivePageLabel.Text", "Active page: " + (currentPageIndex + 1));
         builder.set("#AutoRotateToggle #CheckBox.Value", rotationEnabled);
         builder.set("#PageDurationInput.Value", formatSeconds(current.durationSeconds));
         builder.set("#PageRefreshInput.Value", formatSeconds(current.refreshSeconds));
@@ -334,7 +338,7 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
         current.title = submission.title();
         current.lines = trimTrailingEmpty(submission.lines());
         current.durationSeconds = Math.max(1.0, submission.pageDurationSeconds());
-        current.refreshSeconds = Math.max(0.25, submission.pageRefreshSeconds());
+        current.refreshSeconds = Math.max(0.0, submission.pageRefreshSeconds());
         current.worlds = submission.worlds();
     }
 
@@ -364,9 +368,11 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
         PageDraft current = currentPage();
         LineParts titleParts = parseLine(current.title);
         builder.set("#EditorTitle.Text", "Scoreboard Editor - Page " + (currentPageIndex + 1));
+        builder.set("#PlaceholderHint.Text", "Placeholders: {server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps}");
+        builder.set("#PlaceholderOptional.Text", "Optional: {balance}, {money}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}, {faction}, {faction_rank}, {faction_tag}");
         builder.set("#TitleInput.Value", titleParts.text());
         builder.set("#TitleColorHex.Value", titleParts.color().isEmpty() ? "#f6f8ff" : titleParts.color());
-        builder.set("#ActivePageLabel.Text", "Page active: " + (currentPageIndex + 1));
+        builder.set("#ActivePageLabel.Text", "Active page: " + (currentPageIndex + 1));
         builder.set("#AutoRotateToggle #CheckBox.Value", rotationEnabled);
         builder.set("#PageDurationInput.Value", formatSeconds(current.durationSeconds));
         builder.set("#PageRefreshInput.Value", formatSeconds(current.refreshSeconds));

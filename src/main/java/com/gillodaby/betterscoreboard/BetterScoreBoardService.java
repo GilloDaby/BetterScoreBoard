@@ -16,6 +16,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,6 +30,7 @@ final class BetterScoreBoardService {
     private static final String PLACEHOLDERS = "{server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps}, {balance}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}, {faction}, {faction_rank}, {faction_tag}";
     private static final int DEFAULT_OFFSET_RIGHT = 1;
     private static final int DEFAULT_OFFSET_TOP = 300;
+    private static final String DEFAULT_TEXT_COLOR = "#f6f8ff";
     private final Map<UUID, TrackedHud> huds = new ConcurrentHashMap<>();
     private final ScheduledExecutorService refresher;
     private java.util.concurrent.ScheduledFuture<?> refreshTask;
@@ -213,7 +215,12 @@ final class BetterScoreBoardService {
             BetterScoreBoardHud hud = tracked.hud;
             executeOnWorldThread(player, () -> {
                 try {
-                    hud.refresh(player, ref, buildView(player, huds.size()));
+                    ScoreboardView view = buildView(player, huds.size());
+                    if (view == null || view.equals(tracked.lastView)) {
+                        return;
+                    }
+                    tracked.lastView = view;
+                    hud.refresh(player, ref, view);
                 } catch (Throwable ignored) {
                 }
             });
@@ -234,7 +241,12 @@ final class BetterScoreBoardService {
         BetterScoreBoardHud hud = tracked.hud;
         executeOnWorldThread(player, () -> {
             try {
-                hud.refresh(player, ref, buildView(player, huds.size()));
+                ScoreboardView view = buildView(player, huds.size());
+                if (view == null || view.equals(tracked.lastView)) {
+                    return;
+                }
+                tracked.lastView = view;
+                hud.refresh(player, ref, view);
             } catch (Throwable ignored) {
             }
         });
@@ -617,7 +629,148 @@ final class BetterScoreBoardService {
 
     private String formatRank(Player player) {
         String rank = luckPermsRankSource.getRank(player);
-        return rank != null ? rank : "";
+        return rank != null ? normalizeLuckPermsColors(rank) : "";
+    }
+
+    private String normalizeLuckPermsColors(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
+        String normalized = replaceMiniMessageColors(raw);
+        return replaceLegacyColorCodes(normalized);
+    }
+
+    private String replaceMiniMessageColors(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
+        StringBuilder output = new StringBuilder(raw.length());
+        for (int i = 0; i < raw.length(); ) {
+            char c = raw.charAt(i);
+            if (c == '<') {
+                int close = raw.indexOf('>', i + 1);
+                if (close > i + 1) {
+                    String tag = raw.substring(i + 1, close).trim();
+                    String replacement = convertMiniMessageTagToColor(tag);
+                    if (replacement != null) {
+                        output.append(replacement);
+                    }
+                    i = close + 1;
+                    continue;
+                }
+            }
+            output.append(c);
+            i++;
+        }
+        return output.toString();
+    }
+
+    private String convertMiniMessageTagToColor(String tag) {
+        if (tag == null || tag.isEmpty()) {
+            return null;
+        }
+        String lowered = tag.trim().toLowerCase(Locale.ROOT);
+        if (lowered.startsWith("/")) {
+            return "[" + DEFAULT_TEXT_COLOR + "]";
+        }
+        if (lowered.equals("reset") || lowered.equals("r")) {
+            return "[" + DEFAULT_TEXT_COLOR + "]";
+        }
+        if (lowered.startsWith("#") && lowered.length() == 7 && isHex(lowered.substring(1))) {
+            return "[" + lowered + "]";
+        }
+        if (lowered.startsWith("color:") || lowered.startsWith("colour:")) {
+            String value = lowered.substring(lowered.indexOf(':') + 1).trim();
+            if (value.startsWith("#")) {
+                value = value.substring(1);
+            }
+            if (value.length() == 6 && isHex(value)) {
+                return "[#" + value + "]";
+            }
+        }
+        String mapped = mapNamedColor(lowered);
+        return mapped != null ? "[" + mapped + "]" : null;
+    }
+
+    private String replaceLegacyColorCodes(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
+        StringBuilder output = new StringBuilder(raw.length());
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            if ((c == '&' || c == '§') && i + 1 < raw.length()) {
+                char code = Character.toLowerCase(raw.charAt(i + 1));
+                String color = mapLegacyColor(code);
+                if (color != null) {
+                    output.append("[").append(color).append("]");
+                }
+                i++;
+                continue;
+            }
+            output.append(c);
+        }
+        return output.toString();
+    }
+
+    private String mapLegacyColor(char code) {
+        return switch (code) {
+            case '0' -> "#000000";
+            case '1' -> "#0000aa";
+            case '2' -> "#00aa00";
+            case '3' -> "#00aaaa";
+            case '4' -> "#aa0000";
+            case '5' -> "#aa00aa";
+            case '6' -> "#ffaa00";
+            case '7' -> "#aaaaaa";
+            case '8' -> "#555555";
+            case '9' -> "#5555ff";
+            case 'a' -> "#55ff55";
+            case 'b' -> "#55ffff";
+            case 'c' -> "#ff5555";
+            case 'd' -> "#ff55ff";
+            case 'e' -> "#ffff55";
+            case 'f' -> "#ffffff";
+            case 'r' -> DEFAULT_TEXT_COLOR;
+            default -> null;
+        };
+    }
+
+    private String mapNamedColor(String name) {
+        if (name == null || name.isEmpty()) {
+            return null;
+        }
+        return switch (name) {
+            case "black" -> "#000000";
+            case "dark_blue" -> "#0000aa";
+            case "dark_green" -> "#00aa00";
+            case "dark_aqua" -> "#00aaaa";
+            case "dark_red" -> "#aa0000";
+            case "dark_purple" -> "#aa00aa";
+            case "gold" -> "#ffaa00";
+            case "gray", "grey" -> "#aaaaaa";
+            case "dark_gray", "dark_grey" -> "#555555";
+            case "blue" -> "#5555ff";
+            case "green" -> "#55ff55";
+            case "aqua" -> "#55ffff";
+            case "red" -> "#ff5555";
+            case "light_purple" -> "#ff55ff";
+            case "yellow" -> "#ffff55";
+            case "white" -> "#ffffff";
+            default -> null;
+        };
+    }
+
+    private boolean isHex(String value) {
+        if (value == null || value.length() != 6) {
+            return false;
+        }
+        for (char c : value.toCharArray()) {
+            if (Character.digit(c, 16) < 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String formatGameMode(Player player) {
@@ -1280,6 +1433,8 @@ final class BetterScoreBoardService {
         private volatile Method userManagerLoadUser;
         private volatile Method apiGetContextManager;
         private volatile Method contextManagerGetQueryOptions;
+        private volatile Method apiGetGroupManager;
+        private volatile Method groupManagerGetGroup;
 
         LuckPermsRankSource() {
             refresh();
@@ -1327,7 +1482,9 @@ final class BetterScoreBoardService {
                 return "";
             }
             Object group = invoke(getPrimaryGroup, user);
-            String resolved = group != null ? group.toString() : "";
+            String groupName = group != null ? group.toString() : "";
+            String groupPrefix = resolveGroupPrefix(groupName, user);
+            String resolved = groupPrefix != null ? groupPrefix : "";
             cacheRank(player.getUuid(), resolved);
             return resolved;
         }
@@ -1379,10 +1536,65 @@ final class BetterScoreBoardService {
                 } catch (Exception ignored) {
                     apiGetContextManager = null;
                 }
+                try {
+                    apiGetGroupManager = apiInstance.getClass().getMethod("getGroupManager");
+                } catch (Exception ignored) {
+                    apiGetGroupManager = null;
+                }
             } catch (Exception ignored) {
                 return;
             }
             userGetPrimaryGroup = null;
+        }
+
+        private String resolveGroupPrefix(String groupName, Object user) {
+            if (groupName == null || groupName.isEmpty() || apiInstance == null || apiGetGroupManager == null) {
+                return "";
+            }
+            Object groupManager = invoke(apiGetGroupManager, apiInstance);
+            if (groupManager == null) {
+                return "";
+            }
+            if (groupManagerGetGroup == null) {
+                try {
+                    groupManagerGetGroup = groupManager.getClass().getMethod("getGroup", String.class);
+                } catch (Exception ignored) {
+                    groupManagerGetGroup = null;
+                }
+            }
+            if (groupManagerGetGroup == null) {
+                return "";
+            }
+            Object group = invoke(groupManagerGetGroup, groupManager, groupName);
+            if (group == null) {
+                return "";
+            }
+            Object cachedData = invokeMethodByName(group, "getCachedData");
+            if (cachedData == null) {
+                return "";
+            }
+            Object meta = resolveMetaData(user, cachedData);
+            if (meta == null) {
+                return "";
+            }
+            return extractPrefixFromMeta(meta);
+        }
+
+        private String extractPrefixFromMeta(Object meta) {
+            if (meta == null) {
+                return "";
+            }
+            Object prefix = invokeMethodByName(meta, "getPrefix");
+            if (prefix != null && !prefix.toString().isEmpty()) {
+                return prefix.toString();
+            }
+            Object metaValue = invokeMethodWithString(meta, "getMetaValue", "prefix");
+            if (metaValue != null && !metaValue.toString().isEmpty()) {
+                return metaValue.toString();
+            }
+            Object prefixes = invokeMethodByName(meta, "getPrefixes");
+            String resolved = selectBestPrefix(prefixes);
+            return resolved != null ? resolved : "";
         }
 
         private Object invoke(Method method, Object target, Object... args) {
@@ -1391,6 +1603,47 @@ final class BetterScoreBoardService {
             } catch (Exception ignored) {
                 return null;
             }
+        }
+
+        private Object invokeMethodWithString(Object target, String name, String value) {
+            if (target == null || name == null) {
+                return null;
+            }
+            try {
+                Method method = target.getClass().getMethod(name, String.class);
+                return method.invoke(target, value);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private String selectBestPrefix(Object prefixes) {
+            if (!(prefixes instanceof Map<?, ?> map) || map.isEmpty()) {
+                return "";
+            }
+            String best = "";
+            int bestPriority = Integer.MIN_VALUE;
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                Integer priority = null;
+                if (entry.getKey() instanceof Number number) {
+                    priority = number.intValue();
+                }
+                String value = entry.getValue() != null ? entry.getValue().toString() : "";
+                if (value.isEmpty()) {
+                    continue;
+                }
+                if (priority == null) {
+                    if (best.isEmpty()) {
+                        best = value;
+                    }
+                    continue;
+                }
+                if (priority >= bestPriority) {
+                    bestPriority = priority;
+                    best = value;
+                }
+            }
+            return best;
         }
 
         private static final class CachedRank {
@@ -1432,8 +1685,7 @@ final class BetterScoreBoardService {
             if (meta == null) {
                 return "";
             }
-            Object prefix = invokeMethodByName(meta, "getPrefix");
-            return prefix != null ? prefix.toString() : "";
+            return extractPrefixFromMeta(meta);
         }
 
         private Object resolveMetaData(Object user, Object cachedData) {
@@ -1526,6 +1778,7 @@ final class BetterScoreBoardService {
         final long joinedAtMs;
         long lastWorldTick;
         long lastTickTimeMs;
+        ScoreboardView lastView;
 
         TrackedHud(Player player, PlayerRef ref, BetterScoreBoardHud hud) {
             this.player = player;
@@ -1534,15 +1787,21 @@ final class BetterScoreBoardService {
             this.joinedAtMs = System.currentTimeMillis();
             this.lastTickTimeMs = System.currentTimeMillis();
             this.lastWorldTick = player != null && player.getWorld() != null ? player.getWorld().getTick() : 0;
+            this.lastView = null;
         }
     }
 
     private void scheduleRefresh() {
-        long interval = Math.max(250L, currentPage().refreshMs);
+        long interval = currentPage().refreshMs;
         if (refreshTask != null) {
             refreshTask.cancel(false);
         }
-        refreshTask = refresher.scheduleAtFixedRate(this::refreshAll, interval, interval, TimeUnit.MILLISECONDS);
+        if (interval <= 0) {
+            refreshTask = null;
+            return;
+        }
+        long clamped = Math.max(250L, interval);
+        refreshTask = refresher.scheduleAtFixedRate(this::refreshAll, clamped, clamped, TimeUnit.MILLISECONDS);
     }
 
     private PageState currentPage() {

@@ -220,7 +220,11 @@ final class BetterScoreBoardConfig {
                     case "refreshSeconds" -> {
                         try {
                             double seconds = Double.parseDouble(value);
-                            refreshMillis = (long) Math.max(0.1 * 1000, seconds * 1000);
+                            if (seconds <= 0) {
+                                refreshMillis = 0L;
+                            } else {
+                                refreshMillis = (long) Math.max(0.1 * 1000, seconds * 1000);
+                            }
                         } catch (NumberFormatException ignored) {
                         }
                     }
@@ -283,7 +287,11 @@ final class BetterScoreBoardConfig {
                         if (pageRefreshIndex >= 0 && pageRefreshIndex < MAX_PAGES) {
                             try {
                                 double seconds = Double.parseDouble(value);
-                                pageRefreshes[pageRefreshIndex] = (long) Math.max(250, seconds * 1000);
+                                if (seconds <= 0) {
+                                    pageRefreshes[pageRefreshIndex] = 0L;
+                                } else {
+                                    pageRefreshes[pageRefreshIndex] = (long) Math.max(250, seconds * 1000);
+                                }
                             } catch (NumberFormatException ignored) {
                             }
                         }
@@ -304,7 +312,7 @@ final class BetterScoreBoardConfig {
         }
 
         int cappedLines = Math.max(1, Math.min(HARD_MAX_LINES, maxLines));
-        long cappedRefresh = Math.max(250L, refreshMillis);
+        long cappedRefresh = refreshMillis <= 0 ? 0L : Math.max(250L, refreshMillis);
         int cappedActivePage = Math.max(1, Math.min(MAX_PAGES, activePage));
 
         List<PageConfig> resolvedPages = new ArrayList<>();
@@ -318,7 +326,7 @@ final class BetterScoreBoardConfig {
                 pageTitles[i],
                 Collections.unmodifiableList(lines),
                 Math.max(1_000, pageDurations[i]),
-                Math.max(250, pageRefreshes[i]),
+                pageRefreshes[i] <= 0 ? 0L : Math.max(250, pageRefreshes[i]),
                 Collections.unmodifiableList(worlds)
             ));
         }

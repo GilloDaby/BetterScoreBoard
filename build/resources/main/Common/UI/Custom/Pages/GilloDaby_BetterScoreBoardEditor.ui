@@ -6,13 +6,13 @@ Group #EditorRoot {
   Background: #0a0c10(0.82);
 
     Group #Panel {
-    Anchor: (Width: 900, Height: 700);
+    Anchor: (Width: 900, Height: 760);
     LayoutMode: Top;
     Padding: (Left: 22, Right: 22, Top: 18, Bottom: 18);
     Background: (TexturePath: "../Common/Popup.png", Border: 14);
 
     Group #Header {
-      Anchor: (Width: 856, Height: 314);
+    Anchor: (Width: 856, Height: 414);
       LayoutMode: Top;
       Padding: (Left: 6, Right: 6, Top: 2, Bottom: 8);
 
@@ -24,8 +24,14 @@ Group #EditorRoot {
 
       Label #PlaceholderHint {
         @Text = "Placeholders: {server}, {world}, {online}, {max_players}, {player}, {playtime}, {tps}, {money}";
-        Anchor: (Width: 856, Height: 20);
+        Anchor: (Width: 856, Height: 48);
         Style: (FontSize: 13, TextColor: #c8d2e3, HorizontalAlignment: Center, VerticalAlignment: Center);
+      }
+
+      Label #PlaceholderOptional {
+        @Text = "Optional: {balance}, {money}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}, {faction}, {faction_rank}, {faction_tag}";
+        Anchor: (Width: 856, Height: 32);
+        Style: (FontSize: 12, TextColor: #9fb0c9, HorizontalAlignment: Center, VerticalAlignment: Center);
       }
 
       Label #LimitHint {
@@ -46,7 +52,7 @@ Group #EditorRoot {
         Padding: (Left: 12, Right: 12, Top: 4, Bottom: 4);
 
         Label {
-          Text: "Titre du scoreboard";
+          Text: "Scoreboard title";
           Anchor: (Width: 200, Height: 40);
           Style: (FontSize: 14, TextColor: #c8d2e3, VerticalAlignment: Center);
         }
@@ -114,7 +120,7 @@ Group #EditorRoot {
         Group { FlexWeight: 1; }
 
         Label #ActivePageLabel {
-          @Text = "Page active: 1";
+          @Text = "Active page: 1";
           Anchor: (Width: 160, Height: 30);
           Style: (FontSize: 13, TextColor: #9fc5ff, HorizontalAlignment: End, VerticalAlignment: Center);
         }
@@ -126,14 +132,14 @@ Group #EditorRoot {
         Padding: (Left: 12, Right: 12, Top: 4, Bottom: 4);
 
         $C.@CheckBoxWithLabel #AutoRotateToggle {
-          @Text = "Rotation auto";
+          @Text = "Auto rotation";
           Anchor: (Width: 190, Height: 30);
         }
 
         Group { Anchor: (Width: 12); }
 
         Label {
-          Text: "Durée page (s)";
+          Text: "Page duration (s)";
           Anchor: (Width: 150, Height: 30);
           Style: (FontSize: 13, TextColor: #c8d2e3, VerticalAlignment: Center);
         }
@@ -145,13 +151,14 @@ Group #EditorRoot {
         Group { Anchor: (Width: 12); }
 
         Label {
-          Text: "Refresh page (s)";
+          Text: "Page refresh (s)";
           Anchor: (Width: 160, Height: 30);
           Style: (FontSize: 13, TextColor: #c8d2e3, VerticalAlignment: Center);
         }
 
         $C.@TextField #PageRefreshInput {
           Anchor: (Width: 120, Height: 32);
+          PlaceholderText: "0 = no refresh";
         }
       }
 
@@ -161,7 +168,7 @@ Group #EditorRoot {
         Padding: (Left: 12, Right: 12, Top: 4, Bottom: 4);
 
         Label {
-          Text: "Worlds (comma)";
+          Text: "Worlds (comma-separated)";
           Anchor: (Width: 150, Height: 30);
           Style: (FontSize: 13, TextColor: #c8d2e3, VerticalAlignment: Center);
         }
@@ -175,7 +182,7 @@ Group #EditorRoot {
     }
 
     Group #ScrollArea {
-      Anchor: (Width: 856, Height: 260);
+      Anchor: (Width: 856, Height: 220);
       LayoutMode: TopScrolling;
       Padding: (Left: 6, Right: 6, Top: 8, Bottom: 8);
       Background: (TexturePath: "../Common/ContainerPanelPatch.png", Border: 12);
