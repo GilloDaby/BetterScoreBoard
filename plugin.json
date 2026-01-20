@@ -3,7 +3,7 @@
   "name": "Better ScoreBoard",
   "version": "1.5.3",
   "author": "GilloDaby",
-  "description": "Custom scoreboard on the right.",
+  "description": "Custom scoreboard with multiple featured.",
   "main": "com.gillodaby.betterscoreboard.BetterScoreBoardPlugin",
   "dependencies": [
     "Buuz135:MultipleHUD"
