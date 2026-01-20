@@ -1,7 +1,7 @@
 {
   "Group": "GilloDaby",
   "Name": "Better ScoreBoard",
-  "Version": "1.5.1",
+  "Version": "1.5.3",
   "Description": "Custom scoreboard on the right using MultipleHUD.",
   "Authors": [
     { "Name": "GilloDaby" }

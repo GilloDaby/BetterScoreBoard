@@ -142,7 +142,7 @@ final class BetterScoreBoardConfig {
         boolean[] pageTitleSet = new boolean[MAX_PAGES];
         for (int i = 0; i < MAX_PAGES; i++) {
             PageConfig page = defaults.pages.get(i);
-            pageLines[i] = new ArrayList<>(page.lines());
+            pageLines[i] = new ArrayList<>();
             pageWorlds[i] = new ArrayList<>(page.worlds());
             pageTitles[i] = page.title();
             pageDurations[i] = page.durationMillis();

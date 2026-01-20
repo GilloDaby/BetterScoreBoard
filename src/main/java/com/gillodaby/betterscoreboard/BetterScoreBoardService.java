@@ -330,28 +330,76 @@ final class BetterScoreBoardService {
 
     private String applyPlaceholders(String template, Player player, int onlineCount) {
         String result = template;
-        result = result.replace("{server}", serverName);
-        result = result.replace("{player}", safePlayerName(player));
-        result = result.replace("{rank}", formatRank(player));
-        result = result.replace("{world}", safeWorld(player));
-        result = result.replace("{online}", Integer.toString(Math.max(onlineCount, 0)));
-        result = result.replace("{max_players}", Integer.toString(resolveMaxPlayers(onlineCount)));
-        result = result.replace("{playtime}", formatPlaytime(player));
-        result = result.replace("{tps}", formatTps(player));
-        String balanceValue = formatBalance(player);
-        result = result.replace("{money}", balanceValue);
-        result = result.replace("{balance}", balanceValue);
-        result = result.replace("{pos_x}", formatPos(player, Axis.X));
-        result = result.replace("{pos_y}", formatPos(player, Axis.Y));
-        result = result.replace("{pos_z}", formatPos(player, Axis.Z));
-        result = result.replace("{gamemode}", formatGameMode(player));
-        result = result.replace("{world_tick}", formatWorldTick(player));
-        result = result.replace("{chunk_x}", formatChunk(player, Axis.X));
-        result = result.replace("{chunk_z}", formatChunk(player, Axis.Z));
-        result = result.replace("{uuid}", formatUuid(player));
-        result = normalizeFactionPlaceholders(result);
-        result = hyFactionsPlaceholderSource.replacePlaceholders(player, result);
+        if (template.contains("{server}")) {
+            result = result.replace("{server}", serverName);
+        }
+        if (template.contains("{player}")) {
+            result = result.replace("{player}", safePlayerName(player));
+        }
+        if (template.contains("{rank}")) {
+            result = result.replace("{rank}", formatRank(player));
+        }
+        if (template.contains("{world}")) {
+            result = result.replace("{world}", safeWorld(player));
+        }
+        if (template.contains("{online}")) {
+            result = result.replace("{online}", Integer.toString(Math.max(onlineCount, 0)));
+        }
+        if (template.contains("{max_players}")) {
+            result = result.replace("{max_players}", Integer.toString(resolveMaxPlayers(onlineCount)));
+        }
+        if (template.contains("{playtime}")) {
+            result = result.replace("{playtime}", formatPlaytime(player));
+        }
+        if (template.contains("{tps}")) {
+            result = result.replace("{tps}", formatTps(player));
+        }
+        if (containsAny(template, "{money}", "{balance}")) {
+            String balanceValue = formatBalance(player);
+            result = result.replace("{money}", balanceValue);
+            result = result.replace("{balance}", balanceValue);
+        }
+        if (template.contains("{pos_x}")) {
+            result = result.replace("{pos_x}", formatPos(player, Axis.X));
+        }
+        if (template.contains("{pos_y}")) {
+            result = result.replace("{pos_y}", formatPos(player, Axis.Y));
+        }
+        if (template.contains("{pos_z}")) {
+            result = result.replace("{pos_z}", formatPos(player, Axis.Z));
+        }
+        if (template.contains("{gamemode}")) {
+            result = result.replace("{gamemode}", formatGameMode(player));
+        }
+        if (template.contains("{world_tick}")) {
+            result = result.replace("{world_tick}", formatWorldTick(player));
+        }
+        if (template.contains("{chunk_x}")) {
+            result = result.replace("{chunk_x}", formatChunk(player, Axis.X));
+        }
+        if (template.contains("{chunk_z}")) {
+            result = result.replace("{chunk_z}", formatChunk(player, Axis.Z));
+        }
+        if (template.contains("{uuid}")) {
+            result = result.replace("{uuid}", formatUuid(player));
+        }
+        if (containsAny(template, "{faction}", "{faction_rank}", "{faction_tag}", "%faction%", "%faction_rank%", "%faction_tag%")) {
+            result = normalizeFactionPlaceholders(result);
+            result = hyFactionsPlaceholderSource.replacePlaceholders(player, result);
+        }
         return result;
+    }
+
+    private boolean containsAny(String text, String... tokens) {
+        if (text == null || text.isEmpty() || tokens == null) {
+            return false;
+        }
+        for (String token : tokens) {
+            if (token != null && !token.isEmpty() && text.contains(token)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String normalizeFactionPlaceholders(String text) {
@@ -562,6 +610,7 @@ final class BetterScoreBoardService {
         return String.format("%.1f", Math.max(0.0, Math.min(20.0, tps)));
     }
 
+
     private String formatBalance(Player player) {
         return economyBalanceSource.getBalance(player);
     }
@@ -771,80 +820,144 @@ final class BetterScoreBoardService {
         private static final String TYPE_FIELD_NAME = "TYPE";
         private static final String BALANCE_FIELD_NAME = "balance";
         private static final String ECONOMY_API_CLASS = "com.economy.api.EconomyAPI";
+        private static final long CACHE_WINDOW_MS = 10_000L;
+        private static final long API_RETRY_MS = 30_000L;
 
+        private final Map<UUID, CachedBalance> cachedBalances = new ConcurrentHashMap<>();
         private volatile ComponentType moneyType;
         private volatile Field balanceField;
         private volatile Method componentGetter;
+        private volatile Object economyApi;
+        private volatile Method economyGetInstance;
+        private volatile Method economyGetFormatted;
+        private volatile Method economyGetBalance;
+        private volatile long lastApiLookupMs;
 
         EconomyBalanceSource() {
             refresh();
         }
 
         String getBalance(Player player) {
+            if (player == null || player.getUuid() == null) {
+                return "0";
+            }
+            String cached = getCachedBalance(player.getUuid());
+            if (cached != null) {
+                return cached;
+            }
             String economyValue = getTheEconomyBalance(player);
             if (economyValue != null) {
+                cacheBalance(player.getUuid(), economyValue);
                 return economyValue;
-            }
-            if (player == null) {
-                return "0";
             }
             ensureInitialized();
             ComponentType type = moneyType;
             Method getter = componentGetter;
             Field balance = balanceField;
             if (type == null || getter == null || balance == null) {
+                cacheBalance(player.getUuid(), "0");
                 return "0";
             }
             EntityStore store = player.getWorld() != null ? player.getWorld().getEntityStore() : null;
             PlayerRef ref = player.getPlayerRef();
             if (store == null || ref == null) {
+                cacheBalance(player.getUuid(), "0");
                 return "0";
             }
             Object component = invokeGetter(getter, store, ref, type);
             if (component == null) {
+                cacheBalance(player.getUuid(), "0");
                 return "0";
             }
             Object rawBalance = readBalance(balance, component);
+            String resolved = "0";
             if (rawBalance instanceof Number number) {
-                return Long.toString(number.longValue());
-            }
-            if (rawBalance != null) {
+                resolved = Long.toString(number.longValue());
+            } else if (rawBalance != null) {
                 try {
-                    return Long.toString(Long.parseLong(rawBalance.toString()));
+                    resolved = Long.toString(Long.parseLong(rawBalance.toString()));
                 } catch (NumberFormatException ignored) {
                 }
             }
-            return "0";
+            cacheBalance(player.getUuid(), resolved);
+            return resolved;
+        }
+
+        private String getCachedBalance(UUID uuid) {
+            CachedBalance cached = cachedBalances.get(uuid);
+            if (cached == null) {
+                return null;
+            }
+            long age = System.currentTimeMillis() - cached.updatedAtMs;
+            if (age <= CACHE_WINDOW_MS) {
+                return cached.value;
+            }
+            return null;
+        }
+
+        private void cacheBalance(UUID uuid, String value) {
+            cachedBalances.put(uuid, new CachedBalance(value != null ? value : "0", System.currentTimeMillis()));
         }
 
         private String getTheEconomyBalance(Player player) {
             if (player == null || player.getUuid() == null) {
                 return null;
             }
+            ensureEconomyApi();
+            Object api = economyApi;
+            if (api == null) {
+                return null;
+            }
             try {
-                Class<?> apiClass = Class.forName(ECONOMY_API_CLASS);
-                Method getInstance = apiClass.getMethod("getInstance");
-                Object api = getInstance.invoke(null);
-                if (api == null) {
-                    return null;
-                }
-                try {
-                    Method formatted = apiClass.getMethod("getFormattedBalance", java.util.UUID.class);
-                    Object value = formatted.invoke(api, player.getUuid());
+                if (economyGetFormatted != null) {
+                    Object value = economyGetFormatted.invoke(api, player.getUuid());
                     if (value != null) {
                         return value.toString();
                     }
-                } catch (Exception ignored) {
                 }
-                Method raw = apiClass.getMethod("getBalance", java.util.UUID.class);
-                Object value = raw.invoke(api, player.getUuid());
-                if (value != null) {
-                    return value.toString();
+            } catch (Exception ignored) {
+            }
+            try {
+                if (economyGetBalance != null) {
+                    Object value = economyGetBalance.invoke(api, player.getUuid());
+                    if (value != null) {
+                        return value.toString();
+                    }
                 }
             } catch (Exception ignored) {
                 return null;
             }
             return null;
+        }
+
+        private void ensureEconomyApi() {
+            long now = System.currentTimeMillis();
+            if (economyApi != null && economyGetBalance != null) {
+                return;
+            }
+            if (lastApiLookupMs != 0L && now - lastApiLookupMs < API_RETRY_MS) {
+                return;
+            }
+            lastApiLookupMs = now;
+            try {
+                Class<?> apiClass = Class.forName(ECONOMY_API_CLASS);
+                economyGetInstance = apiClass.getMethod("getInstance");
+                economyGetFormatted = findEconomyMethod(apiClass, "getFormattedBalance");
+                economyGetBalance = apiClass.getMethod("getBalance", java.util.UUID.class);
+                Object api = economyGetInstance.invoke(null);
+                if (api != null) {
+                    economyApi = api;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        private Method findEconomyMethod(Class<?> apiClass, String name) {
+            try {
+                return apiClass.getMethod(name, java.util.UUID.class);
+            } catch (Exception ignored) {
+                return null;
+            }
         }
 
         private void ensureInitialized() {
@@ -905,15 +1018,27 @@ final class BetterScoreBoardService {
                 return null;
             }
         }
+
+        private static final class CachedBalance {
+            final String value;
+            final long updatedAtMs;
+
+            CachedBalance(String value, long updatedAtMs) {
+                this.value = value;
+                this.updatedAtMs = updatedAtMs;
+            }
+        }
     }
 
     // Optional HyFactions placeholder support (%faction%, %faction_rank%, %faction_tag%)
     private static final class HyFactionsPlaceholderSource {
 
+        private static final long CACHE_WINDOW_MS = 10_000L;
         private static final String[] PLACEHOLDER_API_CLASSES = {
             "com.hyfactions.api.PlaceholderAPI",
             "com.hyfactions.util.PlaceholderAPI"
         };
+        private final Map<UUID, CachedFaction> cachedFactions = new ConcurrentHashMap<>();
         private volatile Method replaceByUuid;
         private volatile Method replaceByName;
         private volatile Method replaceByPlayer;
@@ -930,9 +1055,16 @@ final class BetterScoreBoardService {
             if (!containsHyFactionPlaceholders(text)) {
                 return text;
             }
-            String direct = replaceUsingClaimManager(player, text);
-            if (direct != null) {
-                return direct;
+            if (player != null && player.getUuid() != null) {
+                CachedFaction cached = getCachedFaction(player.getUuid());
+                if (cached != null) {
+                    return replaceFactionTokens(text, cached.name, cached.rank, cached.tag);
+                }
+                CachedFaction resolved = resolveFactionData(player);
+                if (resolved != null) {
+                    cacheFaction(player.getUuid(), resolved.name, resolved.rank, resolved.tag);
+                    return replaceFactionTokens(text, resolved.name, resolved.rank, resolved.tag);
+                }
             }
             Object api = resolveApi();
             if (api == null) {
@@ -960,6 +1092,27 @@ final class BetterScoreBoardService {
                 }
             }
             return text;
+        }
+
+        private CachedFaction getCachedFaction(UUID uuid) {
+            CachedFaction cached = cachedFactions.get(uuid);
+            if (cached == null) {
+                return null;
+            }
+            long age = System.currentTimeMillis() - cached.updatedAtMs;
+            if (age <= CACHE_WINDOW_MS) {
+                return cached;
+            }
+            return null;
+        }
+
+        private void cacheFaction(UUID uuid, String name, String rank, String tag) {
+            cachedFactions.put(uuid, new CachedFaction(
+                name != null ? name : "",
+                rank != null ? rank : "",
+                tag != null ? tag : "",
+                System.currentTimeMillis()
+            ));
         }
 
         private boolean containsHyFactionPlaceholders(String text) {
@@ -1003,7 +1156,7 @@ final class BetterScoreBoardService {
             }
         }
 
-        private String replaceUsingClaimManager(Player player, String text) {
+        private CachedFaction resolveFactionData(Player player) {
             if (player == null || player.getUuid() == null) {
                 return null;
             }
@@ -1013,12 +1166,12 @@ final class BetterScoreBoardService {
             }
             Object faction = invoke(claimGetFaction, manager, player.getUuid());
             if (faction == null) {
-                return replaceFactionTokens(text, "", "", "");
+                return new CachedFaction("", "", "", System.currentTimeMillis());
             }
             String name = resolveFactionName(faction);
             String rank = resolveFactionRank(faction, player.getUuid());
             String tag = buildFactionTag(name);
-            return replaceFactionTokens(text, name, rank, tag);
+            return new CachedFaction(name, rank, tag, System.currentTimeMillis());
         }
 
         private Object resolveClaimManager() {
@@ -1095,13 +1248,29 @@ final class BetterScoreBoardService {
                 return null;
             }
         }
+
+        private static final class CachedFaction {
+            final String name;
+            final String rank;
+            final String tag;
+            final long updatedAtMs;
+
+            CachedFaction(String name, String rank, String tag, long updatedAtMs) {
+                this.name = name;
+                this.rank = rank;
+                this.tag = tag;
+                this.updatedAtMs = updatedAtMs;
+            }
+        }
     }
 
     // Optional LuckPerms integration for {rank} (prefix or primary group)
     private static final class LuckPermsRankSource {
 
+        private static final long CACHE_WINDOW_MS = 10_000L;
         private static final String PROVIDER_CLASS = "net.luckperms.api.LuckPermsProvider";
 
+        private final Map<UUID, CachedRank> cachedRanks = new ConcurrentHashMap<>();
         private volatile Object apiInstance;
         private volatile Object userManager;
         private volatile Method providerGet;
@@ -1120,11 +1289,16 @@ final class BetterScoreBoardService {
             if (player == null || player.getUuid() == null) {
                 return "";
             }
+            String cached = getCachedRank(player.getUuid());
+            if (cached != null) {
+                return cached;
+            }
             ensureInitialized();
             Object manager = userManager;
             Method getUser = userManagerGetUser;
             Method getPrimaryGroup = userGetPrimaryGroup;
             if (manager == null || getUser == null) {
+                cacheRank(player.getUuid(), "");
                 return "";
             }
             Object user = invoke(getUser, manager, player.getUuid());
@@ -1136,10 +1310,12 @@ final class BetterScoreBoardService {
                 }
             }
             if (user == null) {
+                cacheRank(player.getUuid(), "");
                 return "";
             }
             String prefix = resolvePrefix(user);
             if (prefix != null && !prefix.isEmpty()) {
+                cacheRank(player.getUuid(), prefix);
                 return prefix;
             }
             if (getPrimaryGroup == null) {
@@ -1147,10 +1323,29 @@ final class BetterScoreBoardService {
                 getPrimaryGroup = userGetPrimaryGroup;
             }
             if (getPrimaryGroup == null) {
+                cacheRank(player.getUuid(), "");
                 return "";
             }
             Object group = invoke(getPrimaryGroup, user);
-            return group != null ? group.toString() : "";
+            String resolved = group != null ? group.toString() : "";
+            cacheRank(player.getUuid(), resolved);
+            return resolved;
+        }
+
+        private String getCachedRank(UUID uuid) {
+            CachedRank cached = cachedRanks.get(uuid);
+            if (cached == null) {
+                return null;
+            }
+            long age = System.currentTimeMillis() - cached.updatedAtMs;
+            if (age <= CACHE_WINDOW_MS) {
+                return cached.value;
+            }
+            return null;
+        }
+
+        private void cacheRank(UUID uuid, String value) {
+            cachedRanks.put(uuid, new CachedRank(value != null ? value : "", System.currentTimeMillis()));
         }
 
         private void ensureInitialized() {
@@ -1195,6 +1390,16 @@ final class BetterScoreBoardService {
                 return method.invoke(target, args);
             } catch (Exception ignored) {
                 return null;
+            }
+        }
+
+        private static final class CachedRank {
+            final String value;
+            final long updatedAtMs;
+
+            CachedRank(String value, long updatedAtMs) {
+                this.value = value;
+                this.updatedAtMs = updatedAtMs;
             }
         }
 
