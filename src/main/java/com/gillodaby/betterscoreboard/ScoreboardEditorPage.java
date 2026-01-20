@@ -21,7 +21,7 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
 
     private final PlayerRef playerRef;
     private final BetterScoreBoardService service;
-    private final BetterScoreBoardConfig config;
+    private BetterScoreBoardConfig config;
     private final List<PageDraft> pages;
     private int currentPageIndex;
     private boolean rotationEnabled;
@@ -157,12 +157,13 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
             }
             case "save" -> {
                 updateDraft(submission);
-                service.applyEditorUpdate(currentPageIndex, buildUpdatedPages(), rotationEnabled, true);
+                service.applyEditorUpdate(currentPageIndex, buildUpdatedPages(), rotationEnabled, false);
+                service.saveConfig();
                 close();
             }
             case "reload" -> {
                 service.reloadConfig();
-                close();
+                reloadFromService();
             }
             case "close" -> close();
             default -> {
@@ -342,6 +343,21 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
         UIEventBuilder events = new UIEventBuilder();
         populatePageFields(builder);
         sendUpdate(builder, events, false);
+    }
+
+    private void reloadFromService() {
+        this.config = service.currentConfig();
+        this.pages.clear();
+        List<BetterScoreBoardConfig.PageConfig> updatedPages = service.snapshotPages();
+        for (BetterScoreBoardConfig.PageConfig page : updatedPages) {
+            this.pages.add(PageDraft.from(page));
+        }
+        while (this.pages.size() < BetterScoreBoardConfig.MAX_PAGES) {
+            this.pages.add(PageDraft.empty(this.pages.size() + 1));
+        }
+        this.currentPageIndex = Math.max(0, Math.min(BetterScoreBoardConfig.MAX_PAGES - 1, service.activePageIndex()));
+        this.rotationEnabled = service.rotationEnabled();
+        refreshPageUI();
     }
 
     private void populatePageFields(UICommandBuilder builder) {

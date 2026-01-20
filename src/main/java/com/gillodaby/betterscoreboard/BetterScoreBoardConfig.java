@@ -417,6 +417,9 @@ final class BetterScoreBoardConfig {
         lines.add("# {tps} -> server TPS (approx)");
         lines.add("# {money} -> uses EconomyPlugin when available");
         lines.add("# {balance} -> mirrors {money} when EconomyPlugin is installed");
+        lines.add("# {faction} -> HyFactions faction name (optional)");
+        lines.add("# {faction_rank} -> HyFactions faction rank (optional)");
+        lines.add("# {faction_tag} -> HyFactions faction tag (optional)");
         lines.add("# Page 1");
         lines.add("page1Title: \"" + defaults.pages.get(0).title().replace("\"", "\\\"") + "\"");
         lines.add("page1DurationSeconds: " + (defaults.pages.get(0).durationMillis() / 1000.0));
@@ -578,7 +581,7 @@ final class BetterScoreBoardConfig {
         lines.add("rotationEnabled: " + cfg.rotationEnabled);
         lines.add("activePage: " + cfg.activePage);
         lines.add("# Lines to render from top to bottom. Available placeholders:");
-        lines.add("# {server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps}, {money}, {balance}");
+        lines.add("# {server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps}, {money}, {balance}, {faction}, {faction_rank}, {faction_tag}");
         for (int i = 0; i < cfg.pages.size(); i++) {
             PageConfig page = cfg.pages.get(i);
             int pageNumber = i + 1;

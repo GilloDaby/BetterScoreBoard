@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 final class BetterScoreBoardService {
 
-    private static final String PLACEHOLDERS = "{server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps}, {balance}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}";
+    private static final String PLACEHOLDERS = "{server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps}, {balance}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}, {faction}, {faction_rank}, {faction_tag}";
     private static final int DEFAULT_OFFSET_RIGHT = 1;
     private static final int DEFAULT_OFFSET_TOP = 300;
     private final Map<UUID, TrackedHud> huds = new ConcurrentHashMap<>();
@@ -41,6 +41,7 @@ final class BetterScoreBoardService {
     private long nextRotationAtMs;
     private final EconomyBalanceSource economyBalanceSource;
     private final LuckPermsRankSource luckPermsRankSource;
+    private final HyFactionsPlaceholderSource hyFactionsPlaceholderSource;
 
     BetterScoreBoardService(BetterScoreBoardConfig config) {
         this.config = config;
@@ -56,6 +57,7 @@ final class BetterScoreBoardService {
         this.nextRotationAtMs = System.currentTimeMillis() + currentPage().durationMs;
         this.economyBalanceSource = new EconomyBalanceSource();
         this.luckPermsRankSource = new LuckPermsRankSource();
+        this.hyFactionsPlaceholderSource = new HyFactionsPlaceholderSource();
         ThreadFactory factory = runnable -> {
             Thread t = new Thread(runnable, "BetterScoreBoard-Refresher");
             t.setDaemon(true);
@@ -347,7 +349,20 @@ final class BetterScoreBoardService {
         result = result.replace("{chunk_x}", formatChunk(player, Axis.X));
         result = result.replace("{chunk_z}", formatChunk(player, Axis.Z));
         result = result.replace("{uuid}", formatUuid(player));
+        result = normalizeFactionPlaceholders(result);
+        result = hyFactionsPlaceholderSource.replacePlaceholders(player, result);
         return result;
+    }
+
+    private String normalizeFactionPlaceholders(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String updated = text;
+        updated = updated.replace("{faction}", "%faction%");
+        updated = updated.replace("{faction_rank}", "%faction_rank%");
+        updated = updated.replace("{faction_tag}", "%faction_tag%");
+        return updated;
     }
 
     private int resolveMaxPlayers(int onlineCount) {
@@ -548,8 +563,7 @@ final class BetterScoreBoardService {
     }
 
     private String formatBalance(Player player) {
-        long balance = economyBalanceSource.getBalance(player);
-        return Long.toString(balance);
+        return economyBalanceSource.getBalance(player);
     }
 
     private String formatRank(Player player) {
@@ -756,6 +770,7 @@ final class BetterScoreBoardService {
         private static final String MONEY_COMPONENT_CLASS = "com.ryukazan.economy.MoneyComponent";
         private static final String TYPE_FIELD_NAME = "TYPE";
         private static final String BALANCE_FIELD_NAME = "balance";
+        private static final String ECONOMY_API_CLASS = "com.economy.api.EconomyAPI";
 
         private volatile ComponentType moneyType;
         private volatile Field balanceField;
@@ -765,37 +780,71 @@ final class BetterScoreBoardService {
             refresh();
         }
 
-        long getBalance(Player player) {
+        String getBalance(Player player) {
+            String economyValue = getTheEconomyBalance(player);
+            if (economyValue != null) {
+                return economyValue;
+            }
             if (player == null) {
-                return 0L;
+                return "0";
             }
             ensureInitialized();
             ComponentType type = moneyType;
             Method getter = componentGetter;
             Field balance = balanceField;
             if (type == null || getter == null || balance == null) {
-                return 0L;
+                return "0";
             }
             EntityStore store = player.getWorld() != null ? player.getWorld().getEntityStore() : null;
             PlayerRef ref = player.getPlayerRef();
             if (store == null || ref == null) {
-                return 0L;
+                return "0";
             }
             Object component = invokeGetter(getter, store, ref, type);
             if (component == null) {
-                return 0L;
+                return "0";
             }
             Object rawBalance = readBalance(balance, component);
             if (rawBalance instanceof Number number) {
-                return number.longValue();
+                return Long.toString(number.longValue());
             }
             if (rawBalance != null) {
                 try {
-                    return Long.parseLong(rawBalance.toString());
+                    return Long.toString(Long.parseLong(rawBalance.toString()));
                 } catch (NumberFormatException ignored) {
                 }
             }
-            return 0L;
+            return "0";
+        }
+
+        private String getTheEconomyBalance(Player player) {
+            if (player == null || player.getUuid() == null) {
+                return null;
+            }
+            try {
+                Class<?> apiClass = Class.forName(ECONOMY_API_CLASS);
+                Method getInstance = apiClass.getMethod("getInstance");
+                Object api = getInstance.invoke(null);
+                if (api == null) {
+                    return null;
+                }
+                try {
+                    Method formatted = apiClass.getMethod("getFormattedBalance", java.util.UUID.class);
+                    Object value = formatted.invoke(api, player.getUuid());
+                    if (value != null) {
+                        return value.toString();
+                    }
+                } catch (Exception ignored) {
+                }
+                Method raw = apiClass.getMethod("getBalance", java.util.UUID.class);
+                Object value = raw.invoke(api, player.getUuid());
+                if (value != null) {
+                    return value.toString();
+                }
+            } catch (Exception ignored) {
+                return null;
+            }
+            return null;
         }
 
         private void ensureInitialized() {
@@ -853,6 +902,196 @@ final class BetterScoreBoardService {
             try {
                 return field.get(component);
             } catch (IllegalAccessException ignored) {
+                return null;
+            }
+        }
+    }
+
+    // Optional HyFactions placeholder support (%faction%, %faction_rank%, %faction_tag%)
+    private static final class HyFactionsPlaceholderSource {
+
+        private static final String[] PLACEHOLDER_API_CLASSES = {
+            "com.hyfactions.api.PlaceholderAPI",
+            "com.hyfactions.util.PlaceholderAPI"
+        };
+        private volatile Method replaceByUuid;
+        private volatile Method replaceByName;
+        private volatile Method replaceByPlayer;
+        private volatile Method getInstance;
+        private volatile Method claimGetInstance;
+        private volatile Method claimGetFaction;
+        private volatile Method factionGetName;
+        private volatile Method factionGetMemberGrade;
+
+        String replacePlaceholders(Player player, String text) {
+            if (text == null || text.isEmpty()) {
+                return text;
+            }
+            if (!containsHyFactionPlaceholders(text)) {
+                return text;
+            }
+            String direct = replaceUsingClaimManager(player, text);
+            if (direct != null) {
+                return direct;
+            }
+            Object api = resolveApi();
+            if (api == null) {
+                return text;
+            }
+            if (player != null && replaceByPlayer != null) {
+                Object value = invoke(replaceByPlayer, api, player, text);
+                if (value != null) {
+                    return value.toString();
+                }
+            }
+            if (player != null && player.getUuid() != null && replaceByUuid != null) {
+                Object value = invoke(replaceByUuid, api, player.getUuid(), text);
+                if (value != null) {
+                    return value.toString();
+                }
+            }
+            if (player != null && replaceByName != null) {
+                String name = player.getDisplayName();
+                if (name != null && !name.isEmpty()) {
+                    Object value = invoke(replaceByName, api, name, text);
+                    if (value != null) {
+                        return value.toString();
+                    }
+                }
+            }
+            return text;
+        }
+
+        private boolean containsHyFactionPlaceholders(String text) {
+            return text.contains("%faction%") || text.contains("%faction_rank%") || text.contains("%faction_tag%");
+        }
+
+        private Object resolveApi() {
+            if (getInstance == null) {
+                for (String className : PLACEHOLDER_API_CLASSES) {
+                    try {
+                        Class<?> apiClass = Class.forName(className);
+                        getInstance = apiClass.getMethod("getInstance");
+                        try {
+                            replaceByUuid = apiClass.getMethod("replacePlaceholders", java.util.UUID.class, String.class);
+                        } catch (Exception ignored) {
+                            replaceByUuid = null;
+                        }
+                        try {
+                            replaceByName = apiClass.getMethod("replacePlaceholders", String.class, String.class);
+                        } catch (Exception ignored) {
+                            replaceByName = null;
+                        }
+                        try {
+                            replaceByPlayer = apiClass.getMethod("replacePlaceholders", Player.class, String.class);
+                        } catch (Exception ignored) {
+                            replaceByPlayer = null;
+                        }
+                        break;
+                    } catch (Exception ignored) {
+                        // try next class name
+                    }
+                }
+                if (getInstance == null) {
+                    return null;
+                }
+            }
+            try {
+                return getInstance.invoke(null);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private String replaceUsingClaimManager(Player player, String text) {
+            if (player == null || player.getUuid() == null) {
+                return null;
+            }
+            Object manager = resolveClaimManager();
+            if (manager == null || claimGetFaction == null) {
+                return null;
+            }
+            Object faction = invoke(claimGetFaction, manager, player.getUuid());
+            if (faction == null) {
+                return replaceFactionTokens(text, "", "", "");
+            }
+            String name = resolveFactionName(faction);
+            String rank = resolveFactionRank(faction, player.getUuid());
+            String tag = buildFactionTag(name);
+            return replaceFactionTokens(text, name, rank, tag);
+        }
+
+        private Object resolveClaimManager() {
+            if (claimGetInstance == null) {
+                try {
+                    Class<?> managerClass = Class.forName("com.kaws.hyfaction.claim.ClaimManager");
+                    claimGetInstance = managerClass.getMethod("getInstance");
+                    claimGetFaction = managerClass.getMethod("getFactionFromPlayer", java.util.UUID.class);
+                } catch (Exception ignored) {
+                    return null;
+                }
+            }
+            try {
+                return claimGetInstance.invoke(null);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private String resolveFactionName(Object faction) {
+            if (faction == null) {
+                return "";
+            }
+            if (factionGetName == null) {
+                try {
+                    factionGetName = faction.getClass().getMethod("getName");
+                } catch (Exception ignored) {
+                    return "";
+                }
+            }
+            Object value = invoke(factionGetName, faction);
+            return value != null ? value.toString() : "";
+        }
+
+        private String resolveFactionRank(Object faction, java.util.UUID playerId) {
+            if (faction == null || playerId == null) {
+                return "";
+            }
+            if (factionGetMemberGrade == null) {
+                try {
+                    factionGetMemberGrade = faction.getClass().getMethod("getMemberGrade", java.util.UUID.class);
+                } catch (Exception ignored) {
+                    return "";
+                }
+            }
+            Object value = invoke(factionGetMemberGrade, faction, playerId);
+            return value != null ? value.toString() : "";
+        }
+
+        private String buildFactionTag(String name) {
+            if (name == null) {
+                return "";
+            }
+            String trimmed = name.replaceAll("\\s+", "");
+            if (trimmed.isEmpty()) {
+                return "";
+            }
+            String tag = trimmed.length() <= 4 ? trimmed : trimmed.substring(0, 4);
+            return tag.toUpperCase();
+        }
+
+        private String replaceFactionTokens(String text, String name, String rank, String tag) {
+            String updated = text;
+            updated = updated.replace("%faction%", name == null ? "" : name);
+            updated = updated.replace("%faction_rank%", rank == null ? "" : rank);
+            updated = updated.replace("%faction_tag%", tag == null ? "" : tag);
+            return updated;
+        }
+
+        private Object invoke(Method method, Object target, Object... args) {
+            try {
+                return method.invoke(target, args);
+            } catch (Exception ignored) {
                 return null;
             }
         }
@@ -1109,12 +1348,24 @@ final class BetterScoreBoardService {
         return Math.max(0, Math.min(pages.size() - 1, index));
     }
 
-    private List<BetterScoreBoardConfig.PageConfig> snapshotPages() {
+    List<BetterScoreBoardConfig.PageConfig> snapshotPages() {
         List<BetterScoreBoardConfig.PageConfig> snapshot = new ArrayList<>();
         for (PageState page : pages) {
             snapshot.add(page.toConfig());
         }
         return snapshot;
+    }
+
+    int activePageIndex() {
+        return activePageIndex;
+    }
+
+    boolean rotationEnabled() {
+        return rotationEnabled;
+    }
+
+    BetterScoreBoardConfig currentConfig() {
+        return config;
     }
 
     private void maybeRotatePages() {
