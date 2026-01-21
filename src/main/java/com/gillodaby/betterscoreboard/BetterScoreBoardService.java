@@ -29,6 +29,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 final class BetterScoreBoardService {
 
@@ -37,10 +38,13 @@ final class BetterScoreBoardService {
     private static final int DEFAULT_OFFSET_TOP = 300;
     private static final String DEFAULT_TEXT_COLOR = "#f6f8ff";
     private static final long PLAYTIME_SAVE_INTERVAL_MS = 5 * 60_000L;
+    private static final long DYNAMIC_DATA_REFRESH_MS = 3_000L;
     private final Map<UUID, TrackedHud> huds = new ConcurrentHashMap<>();
     private final ScheduledExecutorService refresher;
+    private final ScheduledExecutorService dataRefresher;
     private java.util.concurrent.ScheduledFuture<?> refreshTask;
     private java.util.concurrent.ScheduledFuture<?> playtimeSaveTask;
+    private java.util.concurrent.ScheduledFuture<?> dynamicDataTask;
     private BetterScoreBoardConfig config;
     private final PlaytimeTracker playtimeTracker;
     private final String serverName;
@@ -73,7 +77,13 @@ final class BetterScoreBoardService {
             t.setDaemon(true);
             return t;
         };
+        ThreadFactory dataFactory = runnable -> {
+            Thread t = new Thread(runnable, "BetterScoreBoard-DataRefresher");
+            t.setDaemon(true);
+            return t;
+        };
         this.refresher = Executors.newSingleThreadScheduledExecutor(factory);
+        this.dataRefresher = Executors.newSingleThreadScheduledExecutor(dataFactory);
         this.playtimeTracker = new PlaytimeTracker(config.dataDir());
         this.playtimeSaveTask = null;
 
@@ -96,6 +106,7 @@ final class BetterScoreBoardService {
         // Periodic, but self-contained: only refresh our own HUD instances via MultipleHUD.
         scheduleRefresh();
         schedulePlaytimeSave();
+        scheduleDynamicDataRefresh();
     }
 
     void stop() {
@@ -117,8 +128,13 @@ final class BetterScoreBoardService {
             playtimeSaveTask.cancel(false);
             playtimeSaveTask = null;
         }
+        if (dynamicDataTask != null) {
+            dynamicDataTask.cancel(false);
+            dynamicDataTask = null;
+        }
         playtimeTracker.save();
         refresher.shutdownNow();
+        dataRefresher.shutdownNow();
     }
 
     void handlePlayerReady(PlayerReadyEvent event) {
@@ -207,10 +223,12 @@ final class BetterScoreBoardService {
         }
 
         BetterScoreBoardHud hud = new BetterScoreBoardHud(ref, config);
-        ScoreboardView view = buildView(player, huds.size() + 1);
+        TrackedHud tracked = new TrackedHud(player, ref, hud);
+        ScoreboardView view = buildView(player, tracked, huds.size() + 1);
         hud.refresh(player, ref, view);
         MultipleHUD.getInstance().setCustomHud(player, ref, "BetterScoreBoard", hud);
-        huds.put(id, new TrackedHud(player, ref, hud));
+        huds.put(id, tracked);
+        triggerDynamicDataRefresh(tracked);
         refreshSingle(id);
         // Re-arm a few delayed refreshes after join to ensure the HUD stays visible
         System.out.println("[BetterScoreBoard] HUD overlay shown for " + safePlayerName(player));
@@ -238,7 +256,7 @@ final class BetterScoreBoardService {
             BetterScoreBoardHud hud = tracked.hud;
             executeOnWorldThread(player, () -> {
                 try {
-                    ScoreboardView view = buildView(player, huds.size());
+                    ScoreboardView view = buildView(player, tracked, huds.size());
                     if (view == null || view.equals(tracked.lastView)) {
                         return;
                     }
@@ -264,7 +282,7 @@ final class BetterScoreBoardService {
         BetterScoreBoardHud hud = tracked.hud;
         executeOnWorldThread(player, () -> {
             try {
-                ScoreboardView view = buildView(player, huds.size());
+                ScoreboardView view = buildView(player, tracked, huds.size());
                 if (view == null || view.equals(tracked.lastView)) {
                     return;
                 }
@@ -286,20 +304,20 @@ final class BetterScoreBoardService {
         world.execute(action);
     }
 
-    private ScoreboardView buildView(Player player, int onlineCount) {
+    private ScoreboardView buildView(Player player, TrackedHud tracked, int onlineCount) {
         PageState page = pageForPlayer(player);
         if (page == null) {
             return null;
         }
-        List<ScoreboardView.LineRender> formatted = formatLines(page, player, onlineCount);
+        List<ScoreboardView.LineRender> formatted = formatLines(page, player, onlineCount, tracked);
         String rawTitle = page.title != null ? page.title : "";
-        LineParts titleParts = decodeLine(applyPlaceholders(rawTitle, player, onlineCount));
+        LineParts titleParts = decodeLine(applyPlaceholders(rawTitle, player, onlineCount, tracked));
         boolean showLogo = config.logoVisible();
         String logoPath = showLogo ? config.logoTexturePath() : "";
         return new ScoreboardView(titleParts.text(), titleParts.color(), logoPath, showLogo, DEFAULT_OFFSET_RIGHT, DEFAULT_OFFSET_TOP, List.copyOf(formatted), config.showDivider());
     }
 
-    private List<ScoreboardView.LineRender> formatLines(PageState page, Player player, int onlineCount) {
+    private List<ScoreboardView.LineRender> formatLines(PageState page, Player player, int onlineCount, TrackedHud tracked) {
         List<ScoreboardView.LineRender> formatted = new ArrayList<>();
         List<String> currentLines = page != null ? page.lines : Collections.emptyList();
         if (currentLines.isEmpty()) {
@@ -307,19 +325,30 @@ final class BetterScoreBoardService {
         }
 
         int max = Math.min(config.maxLines(), BetterScoreBoardHud.MAX_LINES);
-        for (String template : currentLines) {
+        for (int slot = 0; slot < currentLines.size() && formatted.size() < max; slot++) {
+            String template = currentLines.get(slot);
             if (template == null) {
                 continue;
             }
-            String lineWithPlaceholders = applyPlaceholders(template, player, onlineCount);
+            String lineWithPlaceholders = applyPlaceholders(template, player, onlineCount, tracked);
             BoldResult boldResult = stripBoldMarkers(lineWithPlaceholders);
-            List<ScoreboardView.LineSegment> segments = parseSegments(boldResult.text());
-            formatted.add(new ScoreboardView.LineRender(List.copyOf(segments), boldResult.bold()));
-            if (formatted.size() >= max) {
-                break;
-            }
+            String processed = boldResult.text() != null ? boldResult.text() : "";
+            boolean bold = boldResult.bold();
+            formatted.add(resolveLineRender(tracked, slot, processed, bold));
         }
         return formatted;
+    }
+
+    private ScoreboardView.LineRender resolveLineRender(TrackedHud tracked, int slot, String processed, boolean bold) {
+        if (tracked == null) {
+            return buildLineRender(processed, bold);
+        }
+        return tracked.cachedLineRender(slot, processed, bold, () -> buildLineRender(processed, bold));
+    }
+
+    private ScoreboardView.LineRender buildLineRender(String processed, boolean bold) {
+        List<ScoreboardView.LineSegment> segments = parseSegments(processed);
+        return new ScoreboardView.LineRender(List.copyOf(segments), bold);
     }
 
     private PageState pageForPlayer(Player player) {
@@ -364,7 +393,7 @@ final class BetterScoreBoardService {
         return page.worlds.contains(world);
     }
 
-    private String applyPlaceholders(String template, Player player, int onlineCount) {
+    private String applyPlaceholders(String template, Player player, int onlineCount, TrackedHud tracked) {
         String result = template;
         if (template.contains("{server}")) {
             result = result.replace("{server}", serverName);
@@ -373,7 +402,7 @@ final class BetterScoreBoardService {
             result = result.replace("{player}", safePlayerName(player));
         }
         if (template.contains("{rank}")) {
-            result = result.replace("{rank}", formatRank(player));
+            result = result.replace("{rank}", formatRank(player, tracked));
         }
         if (template.contains("{world}")) {
             result = result.replace("{world}", safeWorld(player));
@@ -394,7 +423,7 @@ final class BetterScoreBoardService {
             result = result.replace("{tps}", formatTps(player));
         }
         if (containsAny(template, "{money}", "{balance}")) {
-            String balanceValue = formatBalance(player);
+            String balanceValue = formatBalance(player, tracked);
             result = result.replace("{money}", balanceValue);
             result = result.replace("{balance}", balanceValue);
         }
@@ -424,7 +453,7 @@ final class BetterScoreBoardService {
         }
         if (containsAny(template, "{faction}", "{faction_rank}", "{faction_tag}", "%faction%", "%faction_rank%", "%faction_tag%")) {
             result = normalizeFactionPlaceholders(result);
-            result = hyFactionsPlaceholderSource.replacePlaceholders(player, result);
+            result = replaceFactionTokens(result, tracked, player);
         }
         return result;
     }
@@ -450,6 +479,28 @@ final class BetterScoreBoardService {
         updated = updated.replace("{faction_rank}", "%faction_rank%");
         updated = updated.replace("{faction_tag}", "%faction_tag%");
         return updated;
+    }
+
+    private String replaceFactionTokens(String text, TrackedHud tracked, Player player) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        FactionSnapshot snapshot = resolveFactionSnapshot(tracked, player);
+        if (snapshot == null) {
+            return text;
+        }
+        String updated = text;
+        updated = updated.replace("%faction%", snapshot.name());
+        updated = updated.replace("%faction_rank%", snapshot.rank());
+        updated = updated.replace("%faction_tag%", snapshot.tag());
+        return updated;
+    }
+
+    private FactionSnapshot resolveFactionSnapshot(TrackedHud tracked, Player player) {
+        if (tracked != null && tracked.factionSnapshot() != null) {
+            return tracked.factionSnapshot();
+        }
+        return hyFactionsPlaceholderSource.snapshot(player);
     }
 
     private int resolveMaxPlayers(int onlineCount) {
@@ -661,13 +712,31 @@ final class BetterScoreBoardService {
     }
 
 
-    private String formatBalance(Player player) {
+    private String formatBalance(Player player, TrackedHud tracked) {
+        if (tracked != null) {
+            return tracked.currentBalance();
+        }
+        return fetchBalanceNow(player);
+    }
+
+    private String formatRank(Player player, TrackedHud tracked) {
+        if (tracked != null) {
+            return tracked.currentRank();
+        }
+        String rank = fetchRankNow(player);
+        return rank != null ? normalizeLuckPermsColors(rank) : "";
+    }
+
+    private String fetchBalanceNow(Player player) {
         return economyBalanceSource.getBalance(player);
     }
 
-    private String formatRank(Player player) {
-        String rank = luckPermsRankSource.getRank(player);
-        return rank != null ? normalizeLuckPermsColors(rank) : "";
+    private String fetchRankNow(Player player) {
+        return luckPermsRankSource.getRank(player);
+    }
+
+    private FactionSnapshot fetchFactionSnapshot(Player player) {
+        return hyFactionsPlaceholderSource.snapshot(player);
     }
 
     private String normalizeLuckPermsColors(String raw) {
@@ -972,6 +1041,8 @@ final class BetterScoreBoardService {
     private record BoldResult(String text, boolean bold) {}
 
     private record LineParts(String color, String text) {}
+
+    private record FactionSnapshot(String name, String rank, String tag) {}
 
     private String sanitizeTitle(String requestedTitle) {
         if (requestedTitle == null || requestedTitle.trim().isEmpty()) {
@@ -1297,6 +1368,23 @@ final class BetterScoreBoardService {
             return text;
         }
 
+        FactionSnapshot snapshot(Player player) {
+            if (player == null || player.getUuid() == null) {
+                return new FactionSnapshot("", "", "");
+            }
+            UUID uuid = player.getUuid();
+            CachedFaction cached = getCachedFaction(uuid);
+            if (cached != null) {
+                return cached.toSnapshot();
+            }
+            CachedFaction resolved = resolveFactionData(player);
+            if (resolved != null) {
+                cacheFaction(uuid, resolved.name, resolved.rank, resolved.tag);
+                return resolved.toSnapshot();
+            }
+            return new FactionSnapshot("", "", "");
+        }
+
         private CachedFaction getCachedFaction(UUID uuid) {
             CachedFaction cached = cachedFactions.get(uuid);
             if (cached == null) {
@@ -1473,6 +1561,10 @@ final class BetterScoreBoardService {
                 this.rank = rank;
                 this.tag = tag;
                 this.updatedAtMs = updatedAtMs;
+            }
+
+            FactionSnapshot toSnapshot() {
+                return new FactionSnapshot(name != null ? name : "", rank != null ? rank : "", tag != null ? tag : "");
             }
         }
     }
@@ -1962,6 +2054,10 @@ final class BetterScoreBoardService {
         long lastWorldTick;
         long lastTickTimeMs;
         ScoreboardView lastView;
+        final LineCacheEntry[] lineCache;
+        private volatile String balance;
+        private volatile String rank;
+        private volatile FactionSnapshot factionSnapshot;
 
         TrackedHud(Player player, PlayerRef ref, BetterScoreBoardHud hud) {
             this.player = player;
@@ -1971,6 +2067,59 @@ final class BetterScoreBoardService {
             this.lastTickTimeMs = System.currentTimeMillis();
             this.lastWorldTick = player != null && player.getWorld() != null ? player.getWorld().getTick() : 0;
             this.lastView = null;
+            this.lineCache = new LineCacheEntry[BetterScoreBoardHud.MAX_LINES];
+            this.balance = "0";
+            this.rank = "";
+            this.factionSnapshot = new FactionSnapshot("", "", "");
+        }
+
+        ScoreboardView.LineRender cachedLineRender(int slot, String raw, boolean bold, Supplier<ScoreboardView.LineRender> builder) {
+            if (slot < 0 || slot >= lineCache.length) {
+                return builder.get();
+            }
+            LineCacheEntry entry = lineCache[slot];
+            if (entry != null && entry.bold == bold && entry.raw.equals(raw)) {
+                return entry.render;
+            }
+            ScoreboardView.LineRender render = builder.get();
+            lineCache[slot] = new LineCacheEntry(raw, bold, render);
+            return render;
+        }
+
+        void updateBalance(String value) {
+            this.balance = value != null ? value : "";
+        }
+
+        String currentBalance() {
+            return balance != null ? balance : "";
+        }
+
+        void updateRank(String value) {
+            this.rank = value != null ? value : "";
+        }
+
+        String currentRank() {
+            return rank != null ? rank : "";
+        }
+
+        void updateFaction(FactionSnapshot snapshot) {
+            this.factionSnapshot = snapshot != null ? snapshot : new FactionSnapshot("", "", "");
+        }
+
+        FactionSnapshot factionSnapshot() {
+            return factionSnapshot;
+        }
+    }
+
+    private static final class LineCacheEntry {
+        final String raw;
+        final boolean bold;
+        final ScoreboardView.LineRender render;
+
+        LineCacheEntry(String raw, boolean bold, ScoreboardView.LineRender render) {
+            this.raw = raw;
+            this.bold = bold;
+            this.render = render;
         }
     }
 
@@ -1983,7 +2132,7 @@ final class BetterScoreBoardService {
             refreshTask = null;
             return;
         }
-        long clamped = Math.max(250L, interval);
+        long clamped = Math.max(BetterScoreBoardConfig.MIN_REFRESH_MS, interval);
         refreshTask = refresher.scheduleAtFixedRate(this::refreshAll, clamped, clamped, TimeUnit.MILLISECONDS);
     }
 
@@ -1997,6 +2146,45 @@ final class BetterScoreBoardService {
             } catch (Throwable ignored) {
             }
         }, PLAYTIME_SAVE_INTERVAL_MS, PLAYTIME_SAVE_INTERVAL_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private void scheduleDynamicDataRefresh() {
+        if (dynamicDataTask != null) {
+            dynamicDataTask.cancel(false);
+        }
+        dynamicDataTask = dataRefresher.scheduleAtFixedRate(() -> {
+            try {
+                refreshDynamicData();
+            } catch (Throwable ignored) {
+            }
+        }, 0L, DYNAMIC_DATA_REFRESH_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private void refreshDynamicData() {
+        for (TrackedHud tracked : huds.values()) {
+            refreshDynamicDataFor(tracked);
+        }
+    }
+
+    private void refreshDynamicDataFor(TrackedHud tracked) {
+        if (tracked == null) {
+            return;
+        }
+        Player player = tracked.player;
+        if (player == null || player.wasRemoved()) {
+            return;
+        }
+        tracked.updateBalance(fetchBalanceNow(player));
+        String rank = fetchRankNow(player);
+        tracked.updateRank(rank != null ? normalizeLuckPermsColors(rank) : "");
+        tracked.updateFaction(fetchFactionSnapshot(player));
+    }
+
+    private void triggerDynamicDataRefresh(TrackedHud tracked) {
+        if (tracked == null) {
+            return;
+        }
+        dataRefresher.execute(() -> refreshDynamicDataFor(tracked));
     }
 
     private PageState currentPage() {

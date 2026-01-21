@@ -13,6 +13,7 @@ final class BetterScoreBoardConfig {
 
     static final int MAX_PAGES = 12;
     private static final int HARD_MAX_LINES = 12;
+    static final long MIN_REFRESH_MS = 1_000L;
 
     private final String title;
     private final String logoTexturePath;
@@ -224,7 +225,8 @@ final class BetterScoreBoardConfig {
                             if (seconds <= 0) {
                                 refreshMillis = 0L;
                             } else {
-                                refreshMillis = (long) Math.max(0.1 * 1000, seconds * 1000);
+                                long millis = (long) (seconds * 1000);
+                                refreshMillis = Math.max(MIN_REFRESH_MS, millis);
                             }
                         } catch (NumberFormatException ignored) {
                         }
@@ -291,7 +293,8 @@ final class BetterScoreBoardConfig {
                                 if (seconds <= 0) {
                                     pageRefreshes[pageRefreshIndex] = 0L;
                                 } else {
-                                    pageRefreshes[pageRefreshIndex] = (long) Math.max(250, seconds * 1000);
+                                    long millis = (long) (seconds * 1000);
+                                    pageRefreshes[pageRefreshIndex] = Math.max(MIN_REFRESH_MS, millis);
                                 }
                             } catch (NumberFormatException ignored) {
                             }
@@ -313,7 +316,7 @@ final class BetterScoreBoardConfig {
         }
 
         int cappedLines = Math.max(1, Math.min(HARD_MAX_LINES, maxLines));
-        long cappedRefresh = refreshMillis <= 0 ? 0L : Math.max(250L, refreshMillis);
+        long cappedRefresh = refreshMillis <= 0 ? 0L : Math.max(MIN_REFRESH_MS, refreshMillis);
         int cappedActivePage = Math.max(1, Math.min(MAX_PAGES, activePage));
 
         List<PageConfig> resolvedPages = new ArrayList<>();
@@ -327,7 +330,7 @@ final class BetterScoreBoardConfig {
                 pageTitles[i],
                 Collections.unmodifiableList(lines),
                 Math.max(1_000, pageDurations[i]),
-                pageRefreshes[i] <= 0 ? 0L : Math.max(250, pageRefreshes[i]),
+                pageRefreshes[i] <= 0 ? 0L : Math.max(MIN_REFRESH_MS, pageRefreshes[i]),
                 Collections.unmodifiableList(worlds)
             ));
         }
@@ -404,7 +407,7 @@ final class BetterScoreBoardConfig {
         List<String> lines = new ArrayList<>();
         lines.add("# Better ScoreBoard configuration");
         lines.add("title: \"" + defaults.title + "\"");
-        lines.add("# HUD refresh rate (seconds). Use decimals for sub-second updates.");
+        lines.add("# HUD refresh rate (seconds). Minimum 1.0 (set 0 to disable updates).");
         lines.add("refreshSeconds: 2.5");
         lines.add("# Maximum lines rendered (capped by the HUD layout)");
         lines.add("maxLines: " + defaults.maxLines);
@@ -578,7 +581,7 @@ final class BetterScoreBoardConfig {
         List<String> lines = new ArrayList<>();
         lines.add("# Better ScoreBoard configuration");
         lines.add("title: \"" + cfg.title + "\"");
-        lines.add("# HUD refresh rate (seconds). Use decimals for sub-second updates.");
+        lines.add("# HUD refresh rate (seconds). Minimum 1.0 (set 0 to disable updates).");
         lines.add("refreshSeconds: " + (cfg.refreshMillis / 1000.0));
         lines.add("# Maximum lines rendered (capped by the HUD layout)");
         lines.add("maxLines: " + cfg.maxLines);
@@ -711,8 +714,8 @@ final class BetterScoreBoardConfig {
         PageConfig(String title, List<String> lines, long durationMillis, long refreshMillis, List<String> worlds) {
             this.title = title != null && !title.isEmpty() ? title : "";
             this.lines = lines != null ? lines : Collections.emptyList();
-            this.durationMillis = durationMillis;
-            this.refreshMillis = refreshMillis;
+            this.durationMillis = Math.max(1_000L, durationMillis);
+            this.refreshMillis = refreshMillis <= 0 ? 0L : Math.max(MIN_REFRESH_MS, refreshMillis);
             this.worlds = worlds != null ? worlds : Collections.emptyList();
         }
 
