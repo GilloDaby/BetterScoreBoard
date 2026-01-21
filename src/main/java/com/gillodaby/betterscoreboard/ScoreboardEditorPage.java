@@ -54,7 +54,7 @@ final class ScoreboardEditorPage extends InteractiveCustomUIPage<ScoreboardEdito
         builder.set("#TitleInput.Value", titleParts.text());
         builder.set("#TitleColorHex.Value", titleParts.color().isEmpty() ? "#f6f8ff" : titleParts.color());
         builder.set("#PlaceholderHint.Text",
-            "Placeholders: {server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps},\n" +
+            "Placeholders: {server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {totalplaytime}, {tps},\n" +
             "{uuid}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z},\n" +
             "Optional: {rank}, {balance}, {money}, {faction}, {faction_rank}, {faction_tag}");
         builder.set("#PlaceholderOptional.Text", "More in coming updates!");

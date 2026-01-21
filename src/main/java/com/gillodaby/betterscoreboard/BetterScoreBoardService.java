@@ -11,10 +11,15 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -27,14 +32,17 @@ import java.util.concurrent.TimeUnit;
 
 final class BetterScoreBoardService {
 
-    private static final String PLACEHOLDERS = "{server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps}, {balance}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}, {faction}, {faction_rank}, {faction_tag}";
+    private static final String PLACEHOLDERS = "{server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {totalplaytime}, {tps}, {balance}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}, {faction}, {faction_rank}, {faction_tag}";
     private static final int DEFAULT_OFFSET_RIGHT = 1;
     private static final int DEFAULT_OFFSET_TOP = 300;
     private static final String DEFAULT_TEXT_COLOR = "#f6f8ff";
+    private static final long PLAYTIME_SAVE_INTERVAL_MS = 5 * 60_000L;
     private final Map<UUID, TrackedHud> huds = new ConcurrentHashMap<>();
     private final ScheduledExecutorService refresher;
     private java.util.concurrent.ScheduledFuture<?> refreshTask;
+    private java.util.concurrent.ScheduledFuture<?> playtimeSaveTask;
     private BetterScoreBoardConfig config;
+    private final PlaytimeTracker playtimeTracker;
     private final String serverName;
     private final int configuredMaxPlayers;
     private final List<PageState> pages;
@@ -66,6 +74,8 @@ final class BetterScoreBoardService {
             return t;
         };
         this.refresher = Executors.newSingleThreadScheduledExecutor(factory);
+        this.playtimeTracker = new PlaytimeTracker(config.dataDir());
+        this.playtimeSaveTask = null;
 
         String resolvedName = "Server";
         int resolvedMaxPlayers = 0;
@@ -85,18 +95,29 @@ final class BetterScoreBoardService {
     void start() {
         // Periodic, but self-contained: only refresh our own HUD instances via MultipleHUD.
         scheduleRefresh();
+        schedulePlaytimeSave();
     }
 
     void stop() {
         for (TrackedHud tracked : huds.values()) {
-            if (tracked != null && tracked.player != null && tracked.ref != null) {
-                MultipleHUD.getInstance().hideCustomHud(tracked.player, tracked.ref, "BetterScoreBoard");
+            if (tracked != null) {
+                if (tracked.player != null && tracked.ref != null) {
+                    MultipleHUD.getInstance().hideCustomHud(tracked.player, tracked.ref, "BetterScoreBoard");
+                }
+                if (tracked.ref != null && tracked.ref.getUuid() != null) {
+                    playtimeTracker.playerStopped(tracked.ref.getUuid());
+                }
             }
         }
         huds.clear();
         if (refreshTask != null) {
             refreshTask.cancel(false);
         }
+        if (playtimeSaveTask != null) {
+            playtimeSaveTask.cancel(false);
+            playtimeSaveTask = null;
+        }
+        playtimeTracker.save();
         refresher.shutdownNow();
     }
 
@@ -114,6 +135,7 @@ final class BetterScoreBoardService {
         if (id == null) {
             return;
         }
+        playtimeTracker.playerStarted(id);
 
         if (huds.containsKey(id)) {
             refresher.execute(() -> refreshSingle(id));
@@ -147,6 +169,7 @@ final class BetterScoreBoardService {
             return;
         }
         UUID id = ref.getUuid();
+        playtimeTracker.playerStopped(id);
         TrackedHud tracked = huds.remove(id);
         if (tracked != null) {
             MultipleHUD.getInstance().hideCustomHud(tracked.player, ref, "BetterScoreBoard");
@@ -269,7 +292,8 @@ final class BetterScoreBoardService {
             return null;
         }
         List<ScoreboardView.LineRender> formatted = formatLines(page, player, onlineCount);
-        LineParts titleParts = decodeLine(page.title);
+        String rawTitle = page.title != null ? page.title : "";
+        LineParts titleParts = decodeLine(applyPlaceholders(rawTitle, player, onlineCount));
         boolean showLogo = config.logoVisible();
         String logoPath = showLogo ? config.logoTexturePath() : "";
         return new ScoreboardView(titleParts.text(), titleParts.color(), logoPath, showLogo, DEFAULT_OFFSET_RIGHT, DEFAULT_OFFSET_TOP, List.copyOf(formatted), config.showDivider());
@@ -362,6 +386,9 @@ final class BetterScoreBoardService {
         }
         if (template.contains("{playtime}")) {
             result = result.replace("{playtime}", formatPlaytime(player));
+        }
+        if (template.contains("{totalplaytime}")) {
+            result = result.replace("{totalplaytime}", formatTotalPlaytime(player));
         }
         if (template.contains("{tps}")) {
             result = result.replace("{tps}", formatTps(player));
@@ -576,6 +603,17 @@ final class BetterScoreBoardService {
         long join = tracked != null ? tracked.joinedAtMs : System.currentTimeMillis();
         long delta = Math.max(0, System.currentTimeMillis() - join);
         long seconds = delta / 1000;
+        long hours = seconds / 3600;
+        long minutes = (seconds % 3600) / 60;
+        long secs = seconds % 60;
+        return String.format("%02dh %02dm %02ds", hours, minutes, secs);
+    }
+
+    private String formatTotalPlaytime(Player player) {
+        long seconds = 0;
+        if (player != null && player.getUuid() != null) {
+            seconds = playtimeTracker.getTotalSeconds(player.getUuid());
+        }
         long hours = seconds / 3600;
         long minutes = (seconds % 3600) / 60;
         long secs = seconds % 60;
@@ -975,6 +1013,8 @@ final class BetterScoreBoardService {
         private static final String ECONOMY_API_CLASS = "com.economy.api.EconomyAPI";
         private static final long CACHE_WINDOW_MS = 10_000L;
         private static final long API_RETRY_MS = 30_000L;
+        private static final long CLAIM_RETRY_MS = 30_000L;
+        private static final long COMPONENT_RETRY_MS = 30_000L;
 
         private final Map<UUID, CachedBalance> cachedBalances = new ConcurrentHashMap<>();
         private volatile ComponentType moneyType;
@@ -985,6 +1025,7 @@ final class BetterScoreBoardService {
         private volatile Method economyGetFormatted;
         private volatile Method economyGetBalance;
         private volatile long lastApiLookupMs;
+        private volatile long lastComponentLookupMs;
 
         EconomyBalanceSource() {
             refresh();
@@ -1124,6 +1165,11 @@ final class BetterScoreBoardService {
             if (componentGetter == null) {
                 componentGetter = findComponentGetter();
             }
+            long now = System.currentTimeMillis();
+            if (moneyType == null && lastComponentLookupMs != 0 && now - lastComponentLookupMs < COMPONENT_RETRY_MS) {
+                return;
+            }
+            lastComponentLookupMs = now;
             try {
                 Class<?> moneyClass = Class.forName(MONEY_COMPONENT_CLASS);
                 Field balance = moneyClass.getField(BALANCE_FIELD_NAME);
@@ -1187,6 +1233,8 @@ final class BetterScoreBoardService {
     private static final class HyFactionsPlaceholderSource {
 
         private static final long CACHE_WINDOW_MS = 10_000L;
+        private static final long API_RETRY_MS = 30_000L;
+        private static final long CLAIM_RETRY_MS = 30_000L;
         private static final String[] PLACEHOLDER_API_CLASSES = {
             "com.hyfactions.api.PlaceholderAPI",
             "com.hyfactions.util.PlaceholderAPI"
@@ -1200,6 +1248,8 @@ final class BetterScoreBoardService {
         private volatile Method claimGetFaction;
         private volatile Method factionGetName;
         private volatile Method factionGetMemberGrade;
+        private volatile long lastApiLookupMs;
+        private volatile long lastClaimLookupMs;
 
         String replacePlaceholders(Player player, String text) {
             if (text == null || text.isEmpty()) {
@@ -1274,6 +1324,11 @@ final class BetterScoreBoardService {
 
         private Object resolveApi() {
             if (getInstance == null) {
+                long now = System.currentTimeMillis();
+                if (lastApiLookupMs != 0 && now - lastApiLookupMs < API_RETRY_MS) {
+                    return null;
+                }
+                lastApiLookupMs = now;
                 for (String className : PLACEHOLDER_API_CLASSES) {
                     try {
                         Class<?> apiClass = Class.forName(className);
@@ -1329,6 +1384,11 @@ final class BetterScoreBoardService {
 
         private Object resolveClaimManager() {
             if (claimGetInstance == null) {
+                long now = System.currentTimeMillis();
+                if (lastClaimLookupMs != 0 && now - lastClaimLookupMs < CLAIM_RETRY_MS) {
+                    return null;
+                }
+                lastClaimLookupMs = now;
                 try {
                     Class<?> managerClass = Class.forName("com.kaws.hyfaction.claim.ClaimManager");
                     claimGetInstance = managerClass.getMethod("getInstance");
@@ -1421,6 +1481,7 @@ final class BetterScoreBoardService {
     private static final class LuckPermsRankSource {
 
         private static final long CACHE_WINDOW_MS = 10_000L;
+        private static final long LOOKUP_RETRY_MS = 30_000L;
         private static final String PROVIDER_CLASS = "net.luckperms.api.LuckPermsProvider";
 
         private final Map<UUID, CachedRank> cachedRanks = new ConcurrentHashMap<>();
@@ -1435,6 +1496,7 @@ final class BetterScoreBoardService {
         private volatile Method contextManagerGetQueryOptions;
         private volatile Method apiGetGroupManager;
         private volatile Method groupManagerGetGroup;
+        private volatile long lastLookupMs;
 
         LuckPermsRankSource() {
             refresh();
@@ -1513,6 +1575,11 @@ final class BetterScoreBoardService {
         }
 
         private void refresh() {
+            long now = System.currentTimeMillis();
+            if (apiInstance == null && userManager == null && lastLookupMs != 0 && now - lastLookupMs < LOOKUP_RETRY_MS) {
+                return;
+            }
+            lastLookupMs = now;
             try {
                 Class<?> provider = Class.forName(PROVIDER_CLASS);
                 providerGet = provider.getMethod("get");
@@ -1771,6 +1838,122 @@ final class BetterScoreBoardService {
         }
     }
 
+    private static final class PlaytimeTracker {
+        private final Path filePath;
+        private final Map<UUID, Long> totals = new ConcurrentHashMap<>();
+        private final Map<UUID, Long> sessionStarts = new ConcurrentHashMap<>();
+
+        PlaytimeTracker(Path dataDir) {
+            Path base = dataDir != null ? dataDir : Path.of("BetterScoreBoard");
+            this.filePath = base.resolve("playtime.yaml");
+            load();
+        }
+
+        void playerStarted(UUID uuid) {
+            if (uuid == null) {
+                return;
+            }
+            sessionStarts.putIfAbsent(uuid, System.currentTimeMillis());
+        }
+
+        void playerStopped(UUID uuid) {
+            if (uuid == null) {
+                return;
+            }
+            Long start = sessionStarts.remove(uuid);
+            if (start == null) {
+                return;
+            }
+            long now = System.currentTimeMillis();
+            long deltaSeconds = Math.max(0, (now - start) / 1000);
+            if (deltaSeconds <= 0) {
+                return;
+            }
+            totals.merge(uuid, deltaSeconds, Long::sum);
+        }
+
+        long getTotalSeconds(UUID uuid) {
+            if (uuid == null) {
+                return 0L;
+            }
+            long total = totals.getOrDefault(uuid, 0L);
+            Long start = sessionStarts.get(uuid);
+            if (start != null) {
+                long extra = Math.max(0, (System.currentTimeMillis() - start) / 1000);
+                total += extra;
+            }
+            return total;
+        }
+
+        void save() {
+            writeSnapshot();
+        }
+
+        private void load() {
+            try {
+                Files.createDirectories(filePath.getParent());
+                if (!Files.exists(filePath)) {
+                    writeSnapshot();
+                    return;
+                }
+                List<String> lines = Files.readAllLines(filePath, StandardCharsets.UTF_8);
+                for (String raw : lines) {
+                    String line = raw.trim();
+                    if (line.isEmpty() || line.startsWith("#")) {
+                        continue;
+                    }
+                    int colon = line.indexOf(':');
+                    if (colon <= 0) {
+                        continue;
+                    }
+                    String key = line.substring(0, colon).trim();
+                    String value = line.substring(colon + 1).trim();
+                    try {
+                        UUID uuid = UUID.fromString(key);
+                        long seconds = Math.max(0, Long.parseLong(value));
+                        totals.put(uuid, seconds);
+                    } catch (IllegalArgumentException ignored) {
+                    }
+                }
+            } catch (IOException e) {
+                System.out.println("[BetterScoreBoard] Unable to read playtime.yaml: " + e.getMessage());
+            }
+        }
+
+        private void writeSnapshot() {
+            long now = System.currentTimeMillis();
+            Map<UUID, Long> snapshot = new HashMap<>(totals);
+            Map<UUID, Long> sessions = new HashMap<>(sessionStarts);
+            for (Map.Entry<UUID, Long> session : sessions.entrySet()) {
+                UUID uuid = session.getKey();
+                Long start = session.getValue();
+                if (uuid == null || start == null) {
+                    continue;
+                }
+                long deltaSeconds = Math.max(0, (now - start) / 1000);
+                if (deltaSeconds <= 0) {
+                    continue;
+                }
+                snapshot.merge(uuid, deltaSeconds, Long::sum);
+            }
+            List<UUID> keys = new ArrayList<>(snapshot.keySet());
+            Collections.sort(keys);
+            List<String> lines = new ArrayList<>();
+            lines.add("# BetterScoreBoard total playtime (seconds)");
+            lines.add("playtime:");
+            for (UUID uuid : keys) {
+                long seconds = Math.max(0, snapshot.getOrDefault(uuid, 0L));
+                lines.add(uuid.toString() + ": " + seconds);
+            }
+            try {
+                Files.createDirectories(filePath.getParent());
+                Files.write(filePath, lines, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                System.out.println("[BetterScoreBoard] Could not save playtime.yaml: " + e.getMessage());
+            }
+        }
+    }
+
     private static final class TrackedHud {
         final Player player;
         final PlayerRef ref;
@@ -1802,6 +1985,18 @@ final class BetterScoreBoardService {
         }
         long clamped = Math.max(250L, interval);
         refreshTask = refresher.scheduleAtFixedRate(this::refreshAll, clamped, clamped, TimeUnit.MILLISECONDS);
+    }
+
+    private void schedulePlaytimeSave() {
+        if (playtimeSaveTask != null) {
+            playtimeSaveTask.cancel(false);
+        }
+        playtimeSaveTask = refresher.scheduleAtFixedRate(() -> {
+            try {
+                playtimeTracker.save();
+            } catch (Throwable ignored) {
+            }
+        }, PLAYTIME_SAVE_INTERVAL_MS, PLAYTIME_SAVE_INTERVAL_MS, TimeUnit.MILLISECONDS);
     }
 
     private PageState currentPage() {

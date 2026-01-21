@@ -182,12 +182,13 @@ final class BetterScoreBoardConfig {
                 if (line.startsWith("-") && (inLines || inPageLines >= 0)) {
                     String value = line.substring(1).trim();
                     value = trimQuotes(value);
-                    if (!value.isEmpty()) {
-                        if (inLines) {
-                            legacyLines.add(value);
-                        } else if (inPageLines >= 0 && inPageLines < MAX_PAGES) {
-                            pageLines[inPageLines].add(value);
-                        }
+                    if (value == null) {
+                        value = "";
+                    }
+                    if (inLines) {
+                        legacyLines.add(value);
+                    } else if (inPageLines >= 0 && inPageLines < MAX_PAGES) {
+                        pageLines[inPageLines].add(value);
                     }
                     continue;
                 }
@@ -422,6 +423,7 @@ final class BetterScoreBoardConfig {
         lines.add("# {player} -> player display name");
         lines.add("# {rank} -> LuckPerms primary group (optional)");
         lines.add("# {playtime} -> time since join");
+        lines.add("# {totalplaytime} -> cumulative playtime stored across sessions");
         lines.add("# {tps} -> server TPS (approx)");
         lines.add("# {money} -> uses EconomyPlugin when available");
         lines.add("# {balance} -> mirrors {money} when EconomyPlugin is installed");
@@ -589,7 +591,7 @@ final class BetterScoreBoardConfig {
         lines.add("rotationEnabled: " + cfg.rotationEnabled);
         lines.add("activePage: " + cfg.activePage);
         lines.add("# Lines to render from top to bottom. Available placeholders:");
-        lines.add("# {server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {tps}, {money}, {balance}, {faction}, {faction_rank}, {faction_tag}");
+        lines.add("# {server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {totalplaytime}, {tps}, {money}, {balance}, {faction}, {faction_rank}, {faction_tag}");
         for (int i = 0; i < cfg.pages.size(); i++) {
             PageConfig page = cfg.pages.get(i);
             int pageNumber = i + 1;
