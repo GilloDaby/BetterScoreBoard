@@ -420,7 +420,7 @@ final class BetterScoreBoardService {
             result = result.replace("{totalplaytime}", formatTotalPlaytime(player));
         }
         if (template.contains("{tps}")) {
-            result = result.replace("{tps}", formatTps(player));
+            result = result.replace("{tps}", formatTps(player, tracked));
         }
         if (containsAny(template, "{money}", "{balance}")) {
             String balanceValue = formatBalance(player, tracked);
@@ -688,27 +688,36 @@ final class BetterScoreBoardService {
         return prefix + (int) Math.round(value);
     }
 
-    private String formatTps(Player player) {
+    private String formatTps(Player player, TrackedHud tracked) {
         if (player == null || player.getWorld() == null) {
             return "20.0";
         }
-        TrackedHud tracked = huds.get(player.getUuid());
+        TrackedHud resolved = tracked != null ? tracked : huds.get(player.getUuid());
+        if (resolved == null) {
+            return "20.0";
+        }
         long tickNow = player.getWorld().getTick();
         long timeNow = System.currentTimeMillis();
-        if (tracked == null) {
-            return "20.0";
-        }
-        long tickDelta = tickNow - tracked.lastWorldTick;
-        long timeDelta = timeNow - tracked.lastTickTimeMs;
+        long tickDelta = tickNow - resolved.lastWorldTick;
+        long timeDelta = timeNow - resolved.lastTickTimeMs;
         if (tickDelta <= 0 || timeDelta <= 0) {
-            tracked.lastWorldTick = tickNow;
-            tracked.lastTickTimeMs = timeNow;
-            return "20.0";
+            resolved.lastWorldTick = tickNow;
+            resolved.lastTickTimeMs = timeNow;
+            return formatCachedTps(resolved);
+        }
+        if (timeDelta < 1000L) {
+            return formatCachedTps(resolved);
         }
         double tps = tickDelta / (timeDelta / 1000.0);
-        tracked.lastWorldTick = tickNow;
-        tracked.lastTickTimeMs = timeNow;
-        return String.format("%.1f", Math.max(0.0, Math.min(20.0, tps)));
+        resolved.lastWorldTick = tickNow;
+        resolved.lastTickTimeMs = timeNow;
+        resolved.lastTpsValue = Math.max(0.0, Math.min(20.0, tps));
+        return formatCachedTps(resolved);
+    }
+
+    private String formatCachedTps(TrackedHud tracked) {
+        double value = tracked != null ? tracked.lastTpsValue : 20.0;
+        return String.format("%.1f", value);
     }
 
 
@@ -2053,6 +2062,7 @@ final class BetterScoreBoardService {
         final long joinedAtMs;
         long lastWorldTick;
         long lastTickTimeMs;
+        double lastTpsValue;
         ScoreboardView lastView;
         final LineCacheEntry[] lineCache;
         private volatile String balance;
@@ -2066,6 +2076,7 @@ final class BetterScoreBoardService {
             this.joinedAtMs = System.currentTimeMillis();
             this.lastTickTimeMs = System.currentTimeMillis();
             this.lastWorldTick = player != null && player.getWorld() != null ? player.getWorld().getTick() : 0;
+            this.lastTpsValue = 20.0;
             this.lastView = null;
             this.lineCache = new LineCacheEntry[BetterScoreBoardHud.MAX_LINES];
             this.balance = "0";

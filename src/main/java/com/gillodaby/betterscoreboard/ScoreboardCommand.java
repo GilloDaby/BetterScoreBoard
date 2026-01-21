@@ -97,7 +97,7 @@ final class ScoreboardCommand extends AbstractCommand {
                 }
                 Player player = ctx.senderAs(Player.class);
                 service.showHud(player);
-                ctx.sendMessage(service.text("Scoreboard affiché."));
+                ctx.sendMessage(service.text("Scoreboard shown."));
                 return CompletableFuture.completedFuture(null);
             }
         };
@@ -113,7 +113,7 @@ final class ScoreboardCommand extends AbstractCommand {
                 }
                 Player player = ctx.senderAs(Player.class);
                 service.hideHud(player);
-                ctx.sendMessage(service.text("Scoreboard caché."));
+                ctx.sendMessage(service.text("Scoreboard hidden."));
                 return CompletableFuture.completedFuture(null);
             }
         };

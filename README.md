@@ -9,4 +9,4 @@ Scoreboard HUD pinned to the right, powered by MultipleHUD. You can edit it live
 - Ships with a default logo at `Custom/Textures/BetterScoreBoard/logo.png` (override via config)
 
 ## Configuration
-The plugin writes `BetterScoreBoard/config.yaml` on first start. Edit it and reload the mod to apply changes, or use `/scoreboard` to tweak lines and click “Sauvegarder + Config” to persist.
+The plugin writes `BetterScoreBoard/config.yaml` on first start. Edit it and reload the mod to apply changes, or use `/scoreboard` to tweak lines and click “Save + Config” to persist.
