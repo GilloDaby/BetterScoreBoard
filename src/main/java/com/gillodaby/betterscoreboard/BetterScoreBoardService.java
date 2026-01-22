@@ -815,14 +815,28 @@ final class BetterScoreBoardService {
         StringBuilder output = new StringBuilder(raw.length());
         for (int i = 0; i < raw.length(); i++) {
             char c = raw.charAt(i);
-            if ((c == '&' || c == '§') && i + 1 < raw.length()) {
-                char code = Character.toLowerCase(raw.charAt(i + 1));
-                String color = mapLegacyColor(code);
-                if (color != null) {
-                    output.append("[").append(color).append("]");
+            if (c == '&' || c == '§') {
+                if (i + 1 < raw.length() && raw.charAt(i + 1) == '#') {
+                    int hexStart = i + 2;
+                    int hexEnd = hexStart + 6;
+                    if (hexEnd <= raw.length()) {
+                        String hex = raw.substring(hexStart, hexEnd);
+                        if (isHex(hex)) {
+                            output.append("[#").append(hex).append("]");
+                            i = hexEnd - 1;
+                            continue;
+                        }
+                    }
                 }
-                i++;
-                continue;
+                if (i + 1 < raw.length()) {
+                    char code = Character.toLowerCase(raw.charAt(i + 1));
+                    String color = mapLegacyColor(code);
+                    if (color != null) {
+                        output.append("[").append(color).append("]");
+                    }
+                    i++;
+                    continue;
+                }
             }
             output.append(c);
         }
