@@ -33,7 +33,7 @@ import java.util.function.Supplier;
 
 final class BetterScoreBoardService {
 
-    private static final String PLACEHOLDERS = "{server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {totalplaytime}, {tps}, {balance}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}, {faction}, {faction_rank}, {faction_tag}";
+    private static final String PLACEHOLDERS = "{server}, {world}, {online}, {max_players}, {player}, {rank}, {level}, {xp}, {playtime}, {totalplaytime}, {tps}, {balance}, {pos_x}, {pos_y}, {pos_z}, {gamemode}, {world_tick}, {chunk_x}, {chunk_z}, {uuid}, {faction}, {faction_rank}, {faction_tag}, {power}, {powermax}, {factionpower}, {factionpowermax}, {claim}, {maxclaim}";
     private static final int DEFAULT_OFFSET_RIGHT = 1;
     private static final int DEFAULT_OFFSET_TOP = 300;
     private static final String DEFAULT_TEXT_COLOR = "#f6f8ff";
@@ -56,6 +56,7 @@ final class BetterScoreBoardService {
     private final EconomyBalanceSource economyBalanceSource;
     private final LuckPermsRankSource luckPermsRankSource;
     private final HyFactionsPlaceholderSource hyFactionsPlaceholderSource;
+    private final RPGLevelingSource rpgLevelingSource;
 
     BetterScoreBoardService(BetterScoreBoardConfig config) {
         this.config = config;
@@ -72,6 +73,7 @@ final class BetterScoreBoardService {
         this.economyBalanceSource = new EconomyBalanceSource();
         this.luckPermsRankSource = new LuckPermsRankSource();
         this.hyFactionsPlaceholderSource = new HyFactionsPlaceholderSource();
+        this.rpgLevelingSource = new RPGLevelingSource();
         ThreadFactory factory = runnable -> {
             Thread t = new Thread(runnable, "BetterScoreBoard-Refresher");
             t.setDaemon(true);
@@ -394,68 +396,112 @@ final class BetterScoreBoardService {
     }
 
     private String applyPlaceholders(String template, Player player, int onlineCount, TrackedHud tracked) {
-        String result = template;
-        if (template.contains("{server}")) {
+        String result = normalizePercentPlaceholders(template);
+        if (result.contains("{server}")) {
             result = result.replace("{server}", serverName);
         }
-        if (template.contains("{player}")) {
+        if (result.contains("{player}")) {
             result = result.replace("{player}", safePlayerName(player));
         }
-        if (template.contains("{rank}")) {
+        if (result.contains("{rank}")) {
             result = result.replace("{rank}", formatRank(player, tracked));
         }
-        if (template.contains("{world}")) {
+        if (result.contains("{world}")) {
             result = result.replace("{world}", safeWorld(player));
         }
-        if (template.contains("{online}")) {
+        if (result.contains("{online}")) {
             result = result.replace("{online}", Integer.toString(Math.max(onlineCount, 0)));
         }
-        if (template.contains("{max_players}")) {
+        if (result.contains("{max_players}")) {
             result = result.replace("{max_players}", Integer.toString(resolveMaxPlayers(onlineCount)));
         }
-        if (template.contains("{playtime}")) {
+        if (result.contains("{playtime}")) {
             result = result.replace("{playtime}", formatPlaytime(player));
         }
-        if (template.contains("{totalplaytime}")) {
+        if (result.contains("{totalplaytime}")) {
             result = result.replace("{totalplaytime}", formatTotalPlaytime(player));
         }
-        if (template.contains("{tps}")) {
+        if (result.contains("{tps}")) {
             result = result.replace("{tps}", formatTps(player, tracked));
         }
-        if (containsAny(template, "{money}", "{balance}")) {
+        if (containsAny(result, "{money}", "{balance}")) {
             String balanceValue = formatBalance(player, tracked);
             result = result.replace("{money}", balanceValue);
             result = result.replace("{balance}", balanceValue);
         }
-        if (template.contains("{pos_x}")) {
+        if (result.contains("{pos_x}")) {
             result = result.replace("{pos_x}", formatPos(player, Axis.X));
         }
-        if (template.contains("{pos_y}")) {
+        if (result.contains("{pos_y}")) {
             result = result.replace("{pos_y}", formatPos(player, Axis.Y));
         }
-        if (template.contains("{pos_z}")) {
+        if (result.contains("{pos_z}")) {
             result = result.replace("{pos_z}", formatPos(player, Axis.Z));
         }
-        if (template.contains("{gamemode}")) {
+        if (result.contains("{gamemode}")) {
             result = result.replace("{gamemode}", formatGameMode(player));
         }
-        if (template.contains("{world_tick}")) {
+        if (result.contains("{world_tick}")) {
             result = result.replace("{world_tick}", formatWorldTick(player));
         }
-        if (template.contains("{chunk_x}")) {
+        if (result.contains("{chunk_x}")) {
             result = result.replace("{chunk_x}", formatChunk(player, Axis.X));
         }
-        if (template.contains("{chunk_z}")) {
+        if (result.contains("{chunk_z}")) {
             result = result.replace("{chunk_z}", formatChunk(player, Axis.Z));
         }
-        if (template.contains("{uuid}")) {
+        if (result.contains("{uuid}")) {
             result = result.replace("{uuid}", formatUuid(player));
         }
-        if (containsAny(template, "{faction}", "{faction_rank}", "{faction_tag}", "%faction%", "%faction_rank%", "%faction_tag%")) {
+        if (containsAny(result, "{level}", "{xp}")) {
+            result = result.replace("{level}", formatLevel(player, tracked));
+            result = result.replace("{xp}", formatXp(player, tracked));
+        }
+        if (containsAny(result, "{faction}", "{faction_rank}", "{faction_tag}", "%faction%", "%faction_rank%", "%faction_tag%",
+            "{power}", "{powermax}", "{factionpower}", "{factionpowermax}", "{claim}", "{maxclaim}",
+            "%power%", "%powermax%", "%factionpower%", "%factionpowermax%", "%claim%", "%maxclaim%")) {
             result = normalizeFactionPlaceholders(result);
             result = replaceFactionTokens(result, tracked, player);
         }
         return result;
+    }
+
+    private String normalizePercentPlaceholders(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String updated = text;
+        updated = updated.replace("%server%", "{server}");
+        updated = updated.replace("%world%", "{world}");
+        updated = updated.replace("%online%", "{online}");
+        updated = updated.replace("%max_players%", "{max_players}");
+        updated = updated.replace("%player%", "{player}");
+        updated = updated.replace("%rank%", "{rank}");
+        updated = updated.replace("%level%", "{level}");
+        updated = updated.replace("%xp%", "{xp}");
+        updated = updated.replace("%playtime%", "{playtime}");
+        updated = updated.replace("%totalplaytime%", "{totalplaytime}");
+        updated = updated.replace("%tps%", "{tps}");
+        updated = updated.replace("%money%", "{money}");
+        updated = updated.replace("%balance%", "{balance}");
+        updated = updated.replace("%pos_x%", "{pos_x}");
+        updated = updated.replace("%pos_y%", "{pos_y}");
+        updated = updated.replace("%pos_z%", "{pos_z}");
+        updated = updated.replace("%gamemode%", "{gamemode}");
+        updated = updated.replace("%world_tick%", "{world_tick}");
+        updated = updated.replace("%chunk_x%", "{chunk_x}");
+        updated = updated.replace("%chunk_z%", "{chunk_z}");
+        updated = updated.replace("%uuid%", "{uuid}");
+        updated = updated.replace("%faction%", "{faction}");
+        updated = updated.replace("%faction_rank%", "{faction_rank}");
+        updated = updated.replace("%faction_tag%", "{faction_tag}");
+        updated = updated.replace("%power%", "{power}");
+        updated = updated.replace("%powermax%", "{powermax}");
+        updated = updated.replace("%factionpower%", "{factionpower}");
+        updated = updated.replace("%factionpowermax%", "{factionpowermax}");
+        updated = updated.replace("%claim%", "{claim}");
+        updated = updated.replace("%maxclaim%", "{maxclaim}");
+        return updated;
     }
 
     private boolean containsAny(String text, String... tokens) {
@@ -493,6 +539,18 @@ final class BetterScoreBoardService {
         updated = updated.replace("%faction%", snapshot.name());
         updated = updated.replace("%faction_rank%", snapshot.rank());
         updated = updated.replace("%faction_tag%", snapshot.tag());
+        updated = updated.replace("{power}", snapshot.power());
+        updated = updated.replace("{powermax}", snapshot.powerMax());
+        updated = updated.replace("{factionpower}", snapshot.factionPower());
+        updated = updated.replace("{factionpowermax}", snapshot.factionPowerMax());
+        updated = updated.replace("{claim}", snapshot.claim());
+        updated = updated.replace("{maxclaim}", snapshot.maxClaim());
+        updated = updated.replace("%power%", snapshot.power());
+        updated = updated.replace("%powermax%", snapshot.powerMax());
+        updated = updated.replace("%factionpower%", snapshot.factionPower());
+        updated = updated.replace("%factionpowermax%", snapshot.factionPowerMax());
+        updated = updated.replace("%claim%", snapshot.claim());
+        updated = updated.replace("%maxclaim%", snapshot.maxClaim());
         return updated;
     }
 
@@ -736,6 +794,20 @@ final class BetterScoreBoardService {
         return rank != null ? normalizeLuckPermsColors(rank) : "";
     }
 
+    private String formatLevel(Player player, TrackedHud tracked) {
+        if (tracked != null) {
+            return tracked.currentLevel();
+        }
+        return rpgLevelingSource.getLevel(player);
+    }
+
+    private String formatXp(Player player, TrackedHud tracked) {
+        if (tracked != null) {
+            return tracked.currentXp();
+        }
+        return rpgLevelingSource.getXp(player);
+    }
+
     private String fetchBalanceNow(Player player) {
         return economyBalanceSource.getBalance(player);
     }
@@ -753,7 +825,8 @@ final class BetterScoreBoardService {
             return "";
         }
         String normalized = replaceMiniMessageColors(raw);
-        return replaceLegacyColorCodes(normalized);
+        normalized = replaceLegacyColorCodes(normalized);
+        return replaceBareHexColors(normalized);
     }
 
     private String replaceMiniMessageColors(String raw) {
@@ -835,6 +908,30 @@ final class BetterScoreBoardService {
                         output.append("[").append(color).append("]");
                     }
                     i++;
+                    continue;
+                }
+            }
+            output.append(c);
+        }
+        return output.toString();
+    }
+
+    private String replaceBareHexColors(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
+        StringBuilder output = new StringBuilder(raw.length());
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            if (c == '#' && i + 6 < raw.length()) {
+                if (i > 0 && raw.charAt(i - 1) == '[') {
+                    output.append(c);
+                    continue;
+                }
+                String hex = raw.substring(i + 1, i + 7);
+                if (isHex(hex)) {
+                    output.append("[#").append(hex).append("]");
+                    i += 6;
                     continue;
                 }
             }
@@ -1065,7 +1162,9 @@ final class BetterScoreBoardService {
 
     private record LineParts(String color, String text) {}
 
-    private record FactionSnapshot(String name, String rank, String tag) {}
+    private record LevelSnapshot(String level, String xp) {}
+
+    private record FactionSnapshot(String name, String rank, String tag, String power, String powerMax, String factionPower, String factionPowerMax, String claim, String maxClaim) {}
 
     private String sanitizeTitle(String requestedTitle) {
         if (requestedTitle == null || requestedTitle.trim().isEmpty()) {
@@ -1340,8 +1439,18 @@ final class BetterScoreBoardService {
         private volatile Method getInstance;
         private volatile Method claimGetInstance;
         private volatile Method claimGetFaction;
+        private volatile Method claimGetAmountOfClaims;
+        private volatile Method claimGetPlayerNameTracker;
         private volatile Method factionGetName;
         private volatile Method factionGetMemberGrade;
+        private volatile Method factionGetTotalPower;
+        private volatile Method factionGetMaxClaims;
+        private volatile Method factionGetMembers;
+        private volatile Method playerNameTrackerGetPlayerPower;
+        private volatile Method configGetMaxPlayerPower;
+        private volatile Method configGetPowerPerClaim;
+        private volatile Method configGetMaxFactionClaims;
+        private volatile Object cachedConfig;
         private volatile long lastApiLookupMs;
         private volatile long lastClaimLookupMs;
 
@@ -1355,12 +1464,12 @@ final class BetterScoreBoardService {
             if (player != null && player.getUuid() != null) {
                 CachedFaction cached = getCachedFaction(player.getUuid());
                 if (cached != null) {
-                    return replaceFactionTokens(text, cached.name, cached.rank, cached.tag);
+                    return replaceFactionTokens(text, cached.name, cached.rank, cached.tag, cached.power, cached.powerMax, cached.factionPower, cached.factionPowerMax, cached.claim, cached.maxClaim);
                 }
                 CachedFaction resolved = resolveFactionData(player);
                 if (resolved != null) {
-                    cacheFaction(player.getUuid(), resolved.name, resolved.rank, resolved.tag);
-                    return replaceFactionTokens(text, resolved.name, resolved.rank, resolved.tag);
+                    cacheFaction(player.getUuid(), resolved.name, resolved.rank, resolved.tag, resolved.power, resolved.powerMax, resolved.factionPower, resolved.factionPowerMax, resolved.claim, resolved.maxClaim);
+                    return replaceFactionTokens(text, resolved.name, resolved.rank, resolved.tag, resolved.power, resolved.powerMax, resolved.factionPower, resolved.factionPowerMax, resolved.claim, resolved.maxClaim);
                 }
             }
             Object api = resolveApi();
@@ -1393,7 +1502,7 @@ final class BetterScoreBoardService {
 
         FactionSnapshot snapshot(Player player) {
             if (player == null || player.getUuid() == null) {
-                return new FactionSnapshot("", "", "");
+                return new FactionSnapshot("", "", "", "0", "0", "0", "0", "0", "0");
             }
             UUID uuid = player.getUuid();
             CachedFaction cached = getCachedFaction(uuid);
@@ -1402,10 +1511,10 @@ final class BetterScoreBoardService {
             }
             CachedFaction resolved = resolveFactionData(player);
             if (resolved != null) {
-                cacheFaction(uuid, resolved.name, resolved.rank, resolved.tag);
+                cacheFaction(uuid, resolved.name, resolved.rank, resolved.tag, resolved.power, resolved.powerMax, resolved.factionPower, resolved.factionPowerMax, resolved.claim, resolved.maxClaim);
                 return resolved.toSnapshot();
             }
-            return new FactionSnapshot("", "", "");
+            return new FactionSnapshot("", "", "", "0", "0", "0", "0", "0", "0");
         }
 
         private CachedFaction getCachedFaction(UUID uuid) {
@@ -1420,17 +1529,29 @@ final class BetterScoreBoardService {
             return null;
         }
 
-        private void cacheFaction(UUID uuid, String name, String rank, String tag) {
+        private void cacheFaction(UUID uuid, String name, String rank, String tag, String power, String powerMax, String factionPower, String factionPowerMax, String claim, String maxClaim) {
             cachedFactions.put(uuid, new CachedFaction(
                 name != null ? name : "",
                 rank != null ? rank : "",
                 tag != null ? tag : "",
+                power != null ? power : "0",
+                powerMax != null ? powerMax : "0",
+                factionPower != null ? factionPower : "0",
+                factionPowerMax != null ? factionPowerMax : "0",
+                claim != null ? claim : "0",
+                maxClaim != null ? maxClaim : "0",
                 System.currentTimeMillis()
             ));
         }
 
         private boolean containsHyFactionPlaceholders(String text) {
-            return text.contains("%faction%") || text.contains("%faction_rank%") || text.contains("%faction_tag%");
+            return text.contains("%faction%") || text.contains("%faction_rank%") || text.contains("%faction_tag%")
+                || text.contains("{power}") || text.contains("{powermax}")
+                || text.contains("{factionpower}") || text.contains("{factionpowermax}")
+                || text.contains("{claim}") || text.contains("{maxclaim}")
+                || text.contains("%power%") || text.contains("%powermax%")
+                || text.contains("%factionpower%") || text.contains("%factionpowermax%")
+                || text.contains("%claim%") || text.contains("%maxclaim%");
         }
 
         private Object resolveApi() {
@@ -1485,12 +1606,29 @@ final class BetterScoreBoardService {
             }
             Object faction = invoke(claimGetFaction, manager, player.getUuid());
             if (faction == null) {
-                return new CachedFaction("", "", "", System.currentTimeMillis());
+                return new CachedFaction("", "", "", "0", "0", "0", "0", "0", "0", System.currentTimeMillis());
             }
             String name = resolveFactionName(faction);
             String rank = resolveFactionRank(faction, player.getUuid());
             String tag = buildFactionTag(name);
-            return new CachedFaction(name, rank, tag, System.currentTimeMillis());
+            int playerPower = resolvePlayerPower(manager, player.getUuid());
+            int playerPowerMax = resolveMaxPlayerPower();
+            int factionPower = resolveFactionPower(faction);
+            int maxClaims = resolveFactionMaxClaims(faction);
+            int claimCount = resolveFactionClaims(manager, faction);
+            int factionPowerMax = resolveFactionPowerMax(faction, maxClaims, playerPowerMax);
+            return new CachedFaction(
+                name,
+                rank,
+                tag,
+                toText(playerPower),
+                toText(playerPowerMax),
+                toText(factionPower),
+                toText(factionPowerMax),
+                toText(claimCount),
+                toText(maxClaims),
+                System.currentTimeMillis()
+            );
         }
 
         private Object resolveClaimManager() {
@@ -1504,6 +1642,17 @@ final class BetterScoreBoardService {
                     Class<?> managerClass = Class.forName("com.kaws.hyfaction.claim.ClaimManager");
                     claimGetInstance = managerClass.getMethod("getInstance");
                     claimGetFaction = managerClass.getMethod("getFactionFromPlayer", java.util.UUID.class);
+                    try {
+                        claimGetPlayerNameTracker = managerClass.getMethod("getPlayerNameTracker");
+                    } catch (Exception ignored) {
+                        claimGetPlayerNameTracker = null;
+                    }
+                    try {
+                        Class<?> factionClass = Class.forName("com.kaws.hyfaction.claim.faction.FactionInfo");
+                        claimGetAmountOfClaims = managerClass.getMethod("getAmountOfClaims", factionClass);
+                    } catch (Exception ignored) {
+                        claimGetAmountOfClaims = null;
+                    }
                 } catch (Exception ignored) {
                     return null;
                 }
@@ -1545,6 +1694,235 @@ final class BetterScoreBoardService {
             return value != null ? value.toString() : "";
         }
 
+        private int resolvePlayerPower(Object manager, java.util.UUID playerId) {
+            if (manager == null || playerId == null || claimGetPlayerNameTracker == null) {
+                return 0;
+            }
+            Object tracker = invoke(claimGetPlayerNameTracker, manager);
+            if (tracker == null) {
+                return 0;
+            }
+            if (playerNameTrackerGetPlayerPower == null) {
+                try {
+                    playerNameTrackerGetPlayerPower = tracker.getClass().getMethod("getPlayerPower", java.util.UUID.class);
+                } catch (Exception ignored) {
+                    return 0;
+                }
+            }
+            Object value = invoke(playerNameTrackerGetPlayerPower, tracker, playerId);
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            try {
+                return value != null ? Integer.parseInt(value.toString()) : 0;
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+
+        private int resolveFactionPower(Object faction) {
+            if (faction == null) {
+                return 0;
+            }
+            if (factionGetTotalPower == null) {
+                try {
+                    factionGetTotalPower = faction.getClass().getMethod("getTotalPower");
+                } catch (Exception ignored) {
+                    return 0;
+                }
+            }
+            Object value = invoke(factionGetTotalPower, faction);
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            try {
+                return value != null ? Integer.parseInt(value.toString()) : 0;
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+
+        private int resolveFactionMaxClaims(Object faction) {
+            if (faction == null) {
+                return 0;
+            }
+            if (factionGetMaxClaims == null) {
+                try {
+                    factionGetMaxClaims = faction.getClass().getMethod("getMaxClaims");
+                } catch (Exception ignored) {
+                    return 0;
+                }
+            }
+            Object value = invoke(factionGetMaxClaims, faction);
+            if (value instanceof Number number) {
+                int resolved = number.intValue();
+                return resolved > 0 ? resolved : resolveMaxFactionClaimsFromConfig();
+            }
+            try {
+                int resolved = value != null ? Integer.parseInt(value.toString()) : 0;
+                return resolved > 0 ? resolved : resolveMaxFactionClaimsFromConfig();
+            } catch (NumberFormatException ignored) {
+                return resolveMaxFactionClaimsFromConfig();
+            }
+        }
+
+        private int resolveFactionClaims(Object manager, Object faction) {
+            if (manager == null || faction == null || claimGetAmountOfClaims == null) {
+                return 0;
+            }
+            Object value = invoke(claimGetAmountOfClaims, manager, faction);
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            try {
+                return value != null ? Integer.parseInt(value.toString()) : 0;
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+
+        private int resolveFactionPowerMax(Object faction, int maxClaims, int playerPowerMax) {
+            int memberCount = resolveFactionMemberCount(faction);
+            if (playerPowerMax > 0 && memberCount > 0) {
+                return playerPowerMax * memberCount;
+            }
+            int powerPerClaim = resolvePowerPerClaim();
+            if (powerPerClaim > 0 && maxClaims > 0) {
+                return powerPerClaim * maxClaims;
+            }
+            return 0;
+        }
+
+        private int resolveFactionMemberCount(Object faction) {
+            if (faction == null) {
+                return 0;
+            }
+            if (factionGetMembers == null) {
+                try {
+                    factionGetMembers = faction.getClass().getMethod("getMembers");
+                } catch (Exception ignored) {
+                    return 0;
+                }
+            }
+            Object value = invoke(factionGetMembers, faction);
+            if (value instanceof Object[] members) {
+                return members.length;
+            }
+            return 0;
+        }
+
+        private int resolveMaxPlayerPower() {
+            Object config = resolveConfig();
+            if (config == null) {
+                return 0;
+            }
+            if (configGetMaxPlayerPower == null) {
+                try {
+                    configGetMaxPlayerPower = config.getClass().getMethod("getMaxPlayerPower");
+                } catch (Exception ignored) {
+                    return 0;
+                }
+            }
+            Object value = invoke(configGetMaxPlayerPower, config);
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            try {
+                return value != null ? Integer.parseInt(value.toString()) : 0;
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+
+        private int resolvePowerPerClaim() {
+            Object config = resolveConfig();
+            if (config == null) {
+                return 0;
+            }
+            if (configGetPowerPerClaim == null) {
+                try {
+                    configGetPowerPerClaim = config.getClass().getMethod("getPowerPerClaim");
+                } catch (Exception ignored) {
+                    return 0;
+                }
+            }
+            Object value = invoke(configGetPowerPerClaim, config);
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            try {
+                return value != null ? Integer.parseInt(value.toString()) : 0;
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+
+        private int resolveMaxFactionClaimsFromConfig() {
+            Object config = resolveConfig();
+            if (config == null) {
+                return 0;
+            }
+            if (configGetMaxFactionClaims == null) {
+                try {
+                    configGetMaxFactionClaims = config.getClass().getMethod("getMaxFactionClaims");
+                } catch (Exception ignored) {
+                    return 0;
+                }
+            }
+            Object value = invoke(configGetMaxFactionClaims, config);
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            try {
+                return value != null ? Integer.parseInt(value.toString()) : 0;
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+
+        private Object resolveConfig() {
+            if (cachedConfig != null) {
+                return cachedConfig;
+            }
+            try {
+                Class<?> main = Class.forName("com.kaws.hyfaction.Main");
+                java.lang.reflect.Field configField = main.getField("CONFIG");
+                Object configWrapper = configField.get(null);
+                if (configWrapper == null) {
+                    return null;
+                }
+                Object config = invokeMethodByName(configWrapper, "get");
+                if (config == null) {
+                    config = invokeMethodByName(configWrapper, "getConfig");
+                }
+                if (config == null) {
+                    config = invokeMethodByName(configWrapper, "getValue");
+                }
+                if (config != null) {
+                    cachedConfig = config;
+                }
+                return config;
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private Object invokeMethodByName(Object target, String name) {
+            if (target == null || name == null) {
+                return null;
+            }
+            try {
+                Method method = target.getClass().getMethod(name);
+                return method.invoke(target);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private String toText(int value) {
+            return Integer.toString(Math.max(0, value));
+        }
+
         private String buildFactionTag(String name) {
             if (name == null) {
                 return "";
@@ -1557,11 +1935,23 @@ final class BetterScoreBoardService {
             return tag.toUpperCase();
         }
 
-        private String replaceFactionTokens(String text, String name, String rank, String tag) {
+        private String replaceFactionTokens(String text, String name, String rank, String tag, String power, String powerMax, String factionPower, String factionPowerMax, String claim, String maxClaim) {
             String updated = text;
             updated = updated.replace("%faction%", name == null ? "" : name);
             updated = updated.replace("%faction_rank%", rank == null ? "" : rank);
             updated = updated.replace("%faction_tag%", tag == null ? "" : tag);
+            updated = updated.replace("{power}", power == null ? "0" : power);
+            updated = updated.replace("{powermax}", powerMax == null ? "0" : powerMax);
+            updated = updated.replace("{factionpower}", factionPower == null ? "0" : factionPower);
+            updated = updated.replace("{factionpowermax}", factionPowerMax == null ? "0" : factionPowerMax);
+            updated = updated.replace("{claim}", claim == null ? "0" : claim);
+            updated = updated.replace("{maxclaim}", maxClaim == null ? "0" : maxClaim);
+            updated = updated.replace("%power%", power == null ? "0" : power);
+            updated = updated.replace("%powermax%", powerMax == null ? "0" : powerMax);
+            updated = updated.replace("%factionpower%", factionPower == null ? "0" : factionPower);
+            updated = updated.replace("%factionpowermax%", factionPowerMax == null ? "0" : factionPowerMax);
+            updated = updated.replace("%claim%", claim == null ? "0" : claim);
+            updated = updated.replace("%maxclaim%", maxClaim == null ? "0" : maxClaim);
             return updated;
         }
 
@@ -1577,17 +1967,207 @@ final class BetterScoreBoardService {
             final String name;
             final String rank;
             final String tag;
+            final String power;
+            final String powerMax;
+            final String factionPower;
+            final String factionPowerMax;
+            final String claim;
+            final String maxClaim;
             final long updatedAtMs;
 
-            CachedFaction(String name, String rank, String tag, long updatedAtMs) {
+            CachedFaction(String name, String rank, String tag, String power, String powerMax, String factionPower, String factionPowerMax, String claim, String maxClaim, long updatedAtMs) {
                 this.name = name;
                 this.rank = rank;
                 this.tag = tag;
+                this.power = power;
+                this.powerMax = powerMax;
+                this.factionPower = factionPower;
+                this.factionPowerMax = factionPowerMax;
+                this.claim = claim;
+                this.maxClaim = maxClaim;
                 this.updatedAtMs = updatedAtMs;
             }
 
             FactionSnapshot toSnapshot() {
-                return new FactionSnapshot(name != null ? name : "", rank != null ? rank : "", tag != null ? tag : "");
+                return new FactionSnapshot(
+                    name != null ? name : "",
+                    rank != null ? rank : "",
+                    tag != null ? tag : "",
+                    power != null ? power : "0",
+                    powerMax != null ? powerMax : "0",
+                    factionPower != null ? factionPower : "0",
+                    factionPowerMax != null ? factionPowerMax : "0",
+                    claim != null ? claim : "0",
+                    maxClaim != null ? maxClaim : "0"
+                );
+            }
+        }
+    }
+
+    // Optional RPGLeveling integration for {level} and {xp}
+    private static final class RPGLevelingSource {
+
+        private static final long CACHE_WINDOW_MS = 10_000L;
+        private static final long LOOKUP_RETRY_MS = 30_000L;
+        private static final String PLUGIN_CLASS = "org.zuxaw.plugin.RPGLevelingPlugin";
+
+        private final Map<UUID, CachedLevel> cachedLevels = new ConcurrentHashMap<>();
+        private volatile Object pluginInstance;
+        private volatile Object levelingService;
+        private volatile Method pluginGet;
+        private volatile Method pluginGetLevelingService;
+        private volatile Method serviceGetPlayerData;
+        private volatile Method dataGetLevel;
+        private volatile Method dataGetExperience;
+        private volatile long lastLookupMs;
+
+        LevelSnapshot snapshot(Player player) {
+            if (player == null || player.getUuid() == null) {
+                return new LevelSnapshot("0", "0");
+            }
+            UUID uuid = player.getUuid();
+            CachedLevel cached = getCached(uuid);
+            if (cached != null) {
+                return new LevelSnapshot(cached.level, cached.xp);
+            }
+            LevelSnapshot resolved = resolve(player);
+            cache(uuid, resolved.level(), resolved.xp());
+            return resolved;
+        }
+
+        String getLevel(Player player) {
+            return snapshot(player).level();
+        }
+
+        String getXp(Player player) {
+            return snapshot(player).xp();
+        }
+
+        private CachedLevel getCached(UUID uuid) {
+            CachedLevel cached = cachedLevels.get(uuid);
+            if (cached == null) {
+                return null;
+            }
+            long age = System.currentTimeMillis() - cached.updatedAtMs;
+            return age <= CACHE_WINDOW_MS ? cached : null;
+        }
+
+        private void cache(UUID uuid, String level, String xp) {
+            cachedLevels.put(uuid, new CachedLevel(
+                level != null ? level : "0",
+                xp != null ? xp : "0",
+                System.currentTimeMillis()
+            ));
+        }
+
+        private LevelSnapshot resolve(Player player) {
+            ensureInitialized();
+            if (levelingService == null || serviceGetPlayerData == null) {
+                return new LevelSnapshot("0", "0");
+            }
+            PlayerRef ref = player.getPlayerRef();
+            if (ref == null) {
+                return new LevelSnapshot("0", "0");
+            }
+            Object data = invoke(serviceGetPlayerData, levelingService, ref);
+            if (data == null) {
+                return new LevelSnapshot("0", "0");
+            }
+            if (dataGetLevel == null) {
+                try {
+                    dataGetLevel = data.getClass().getMethod("getLevel");
+                } catch (Exception ignored) {
+                    dataGetLevel = null;
+                }
+            }
+            if (dataGetExperience == null) {
+                try {
+                    dataGetExperience = data.getClass().getMethod("getExperience");
+                } catch (Exception ignored) {
+                    dataGetExperience = null;
+                }
+            }
+            int level = 0;
+            double xp = 0.0;
+            Object levelValue = dataGetLevel != null ? invoke(dataGetLevel, data) : null;
+            if (levelValue instanceof Number number) {
+                level = number.intValue();
+            } else if (levelValue != null) {
+                try {
+                    level = Integer.parseInt(levelValue.toString());
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            Object xpValue = dataGetExperience != null ? invoke(dataGetExperience, data) : null;
+            if (xpValue instanceof Number number) {
+                xp = number.doubleValue();
+            } else if (xpValue != null) {
+                try {
+                    xp = Double.parseDouble(xpValue.toString());
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            return new LevelSnapshot(Integer.toString(Math.max(0, level)), formatNumber(xp));
+        }
+
+        private void ensureInitialized() {
+            long now = System.currentTimeMillis();
+            if (levelingService != null && serviceGetPlayerData != null) {
+                return;
+            }
+            if (lastLookupMs != 0 && now - lastLookupMs < LOOKUP_RETRY_MS) {
+                return;
+            }
+            lastLookupMs = now;
+            try {
+                Class<?> pluginClass = Class.forName(PLUGIN_CLASS);
+                pluginGet = pluginClass.getMethod("get");
+                pluginInstance = pluginGet.invoke(null);
+                if (pluginInstance == null) {
+                    return;
+                }
+                pluginGetLevelingService = pluginClass.getMethod("getLevelingService");
+                levelingService = pluginGetLevelingService.invoke(pluginInstance);
+                if (levelingService == null) {
+                    return;
+                }
+                serviceGetPlayerData = levelingService.getClass().getMethod("getPlayerData", PlayerRef.class);
+            } catch (Exception ignored) {
+                levelingService = null;
+            }
+        }
+
+        private Object invoke(Method method, Object target, Object... args) {
+            if (method == null || target == null) {
+                return null;
+            }
+            try {
+                return method.invoke(target, args);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private String formatNumber(double value) {
+            if (Double.isNaN(value) || Double.isInfinite(value)) {
+                return "0";
+            }
+            double abs = Math.abs(value);
+            if (Math.abs(abs - Math.rint(abs)) < 0.0001) {
+                return Long.toString(Math.round(abs));
+            }
+            return String.format(Locale.US, "%.2f", abs);
+        }
+
+        private static final class CachedLevel {
+            final String level;
+            final String xp;
+            final long updatedAtMs;
+
+            CachedLevel(String level, String xp, long updatedAtMs) {
+                this.level = level;
+                this.xp = xp;
+                this.updatedAtMs = updatedAtMs;
             }
         }
     }
@@ -2081,6 +2661,8 @@ final class BetterScoreBoardService {
         final LineCacheEntry[] lineCache;
         private volatile String balance;
         private volatile String rank;
+        private volatile String level;
+        private volatile String xp;
         private volatile FactionSnapshot factionSnapshot;
 
         TrackedHud(Player player, PlayerRef ref, BetterScoreBoardHud hud) {
@@ -2095,7 +2677,9 @@ final class BetterScoreBoardService {
             this.lineCache = new LineCacheEntry[BetterScoreBoardHud.MAX_LINES];
             this.balance = "0";
             this.rank = "";
-            this.factionSnapshot = new FactionSnapshot("", "", "");
+            this.level = "0";
+            this.xp = "0";
+            this.factionSnapshot = new FactionSnapshot("", "", "", "0", "0", "0", "0", "0", "0");
         }
 
         ScoreboardView.LineRender cachedLineRender(int slot, String raw, boolean bold, Supplier<ScoreboardView.LineRender> builder) {
@@ -2127,8 +2711,24 @@ final class BetterScoreBoardService {
             return rank != null ? rank : "";
         }
 
+        void updateLevel(String value) {
+            this.level = value != null ? value : "0";
+        }
+
+        String currentLevel() {
+            return level != null ? level : "0";
+        }
+
+        void updateXp(String value) {
+            this.xp = value != null ? value : "0";
+        }
+
+        String currentXp() {
+            return xp != null ? xp : "0";
+        }
+
         void updateFaction(FactionSnapshot snapshot) {
-            this.factionSnapshot = snapshot != null ? snapshot : new FactionSnapshot("", "", "");
+            this.factionSnapshot = snapshot != null ? snapshot : new FactionSnapshot("", "", "", "0", "0", "0", "0", "0", "0");
         }
 
         FactionSnapshot factionSnapshot() {
@@ -2203,6 +2803,11 @@ final class BetterScoreBoardService {
         String rank = fetchRankNow(player);
         tracked.updateRank(rank != null ? normalizeLuckPermsColors(rank) : "");
         tracked.updateFaction(fetchFactionSnapshot(player));
+        executeOnWorldThread(player, () -> {
+            LevelSnapshot levelSnapshot = rpgLevelingSource.snapshot(player);
+            tracked.updateLevel(levelSnapshot.level());
+            tracked.updateXp(levelSnapshot.xp());
+        });
     }
 
     private void triggerDynamicDataRefresh(TrackedHud tracked) {

@@ -1,7 +1,7 @@
 {
   "Group": "GilloDaby",
   "Name": "Better ScoreBoard",
-  "Version": "1.5.9",
+  "Version": "1.6.2",
   "Description": "Custom scoreboard on the right using MultipleHUD.",
   "Authors": [
     { "Name": "GilloDaby" }
@@ -15,7 +15,8 @@
     "Ryukazan:EconomyPlugin": "*",
     "LuckPerms:LuckPerms": "*",
     "TheEconomy:TheEconomy": "*",
-    "HyFactions:HyFactions": "*"
+    "HyFactions:HyFactions": "*",
+    "Zuxaw:RPGLeveling": "*"
   },
   "DisabledByDefault": false,
   "Main": "com.gillodaby.betterscoreboard.BetterScoreBoardPlugin",
