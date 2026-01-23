@@ -425,8 +425,6 @@ final class BetterScoreBoardConfig {
         lines.add("# {max_players} -> server max players");
         lines.add("# {player} -> player display name");
         lines.add("# {rank} -> LuckPerms primary group (optional)");
-        lines.add("# {level} -> RPGLeveling level (optional)");
-        lines.add("# {xp} -> RPGLeveling XP (optional)");
         lines.add("# {playtime} -> time since join");
         lines.add("# {totalplaytime} -> cumulative playtime stored across sessions");
         lines.add("# {tps} -> server TPS (approx)");
@@ -602,7 +600,7 @@ final class BetterScoreBoardConfig {
         lines.add("rotationEnabled: " + cfg.rotationEnabled);
         lines.add("activePage: " + cfg.activePage);
         lines.add("# Lines to render from top to bottom. Available placeholders:");
-        lines.add("# {server}, {world}, {online}, {max_players}, {player}, {rank}, {level}, {xp}, {playtime}, {totalplaytime}, {tps}, {money}, {balance}, {faction}, {faction_rank}, {faction_tag}, {power}, {powermax}, {factionpower}, {factionpowermax}, {claim}, {maxclaim}");
+        lines.add("# {server}, {world}, {online}, {max_players}, {player}, {rank}, {playtime}, {totalplaytime}, {tps}, {money}, {balance}, {faction}, {faction_rank}, {faction_tag}, {power}, {powermax}, {factionpower}, {factionpowermax}, {claim}, {maxclaim}");
         for (int i = 0; i < cfg.pages.size(); i++) {
             PageConfig page = cfg.pages.get(i);
             int pageNumber = i + 1;
