@@ -1180,6 +1180,7 @@ final class BetterScoreBoardService {
         private static final String TYPE_FIELD_NAME = "TYPE";
         private static final String BALANCE_FIELD_NAME = "balance";
         private static final String ECONOMY_API_CLASS = "com.economy.api.EconomyAPI";
+        private static final String AREFY_API_CLASS = "com.arefyeconomy.api.ArefyEconomyAPI";
         private static final long CACHE_WINDOW_MS = 10_000L;
         private static final long API_RETRY_MS = 30_000L;
         private static final long CLAIM_RETRY_MS = 30_000L;
@@ -1193,6 +1194,11 @@ final class BetterScoreBoardService {
         private volatile Method economyGetInstance;
         private volatile Method economyGetFormatted;
         private volatile Method economyGetBalance;
+        private volatile Class<?> arefyApiClass;
+        private volatile Method arefyIsAvailable;
+        private volatile Method arefyGetBalance;
+        private volatile Method arefyFormat;
+        private volatile long lastArefyLookupMs;
         private volatile long lastApiLookupMs;
         private volatile long lastComponentLookupMs;
 
@@ -1266,6 +1272,10 @@ final class BetterScoreBoardService {
             if (player == null || player.getUuid() == null) {
                 return null;
             }
+            String arefyValue = getArefyBalance(player);
+            if (arefyValue != null) {
+                return arefyValue;
+            }
             ensureEconomyApi();
             Object api = economyApi;
             if (api == null) {
@@ -1312,6 +1322,72 @@ final class BetterScoreBoardService {
                     economyApi = api;
                 }
             } catch (Exception ignored) {
+            }
+        }
+
+        private String getArefyBalance(Player player) {
+            if (player == null || player.getUuid() == null) {
+                return null;
+            }
+            ensureArefyApi();
+            if (arefyApiClass == null || arefyGetBalance == null) {
+                return null;
+            }
+            try {
+                if (arefyIsAvailable != null) {
+                    Object available = arefyIsAvailable.invoke(null);
+                    if (available instanceof Boolean ok && !ok) {
+                        return null;
+                    }
+                }
+                Object value = arefyGetBalance.invoke(null, player.getUuid());
+                if (value instanceof Number number) {
+                    double amount = number.doubleValue();
+                    String formatted = formatArefy(amount);
+                    return formatted != null ? formatted : Double.toString(amount);
+                }
+                if (value != null) {
+                    return value.toString();
+                }
+            } catch (Exception ignored) {
+                return null;
+            }
+            return null;
+        }
+
+        private String formatArefy(double amount) {
+            if (arefyFormat == null) {
+                return null;
+            }
+            try {
+                Object value = arefyFormat.invoke(null, amount);
+                return value != null ? value.toString() : null;
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private void ensureArefyApi() {
+            long now = System.currentTimeMillis();
+            if (arefyApiClass != null && arefyGetBalance != null) {
+                return;
+            }
+            if (lastArefyLookupMs != 0L && now - lastArefyLookupMs < API_RETRY_MS) {
+                return;
+            }
+            lastArefyLookupMs = now;
+            try {
+                Class<?> apiClass = Class.forName(AREFY_API_CLASS);
+                arefyApiClass = apiClass;
+                arefyIsAvailable = apiClass.getMethod("isAvailable");
+                arefyGetBalance = apiClass.getMethod("getBalance", java.util.UUID.class);
+                try {
+                    arefyFormat = apiClass.getMethod("format", double.class);
+                } catch (Exception ignored) {
+                    arefyFormat = null;
+                }
+            } catch (Exception ignored) {
+                arefyApiClass = null;
             }
         }
 
