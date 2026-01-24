@@ -30,6 +30,7 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
     options.release = 25
+    options.compilerArgs += ['-Xlint:deprecation']
 }
 
 repositories {
