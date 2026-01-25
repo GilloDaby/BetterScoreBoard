@@ -331,24 +331,22 @@ final class BetterScoreBoardService {
                 continue;
             }
             String lineWithPlaceholders = applyPlaceholders(template, player, onlineCount, tracked);
-            BoldResult boldResult = stripBoldMarkers(lineWithPlaceholders);
-            String processed = boldResult.text() != null ? boldResult.text() : "";
-            boolean bold = boldResult.bold();
-            formatted.add(resolveLineRender(tracked, slot, processed, bold));
+            String processed = lineWithPlaceholders != null ? lineWithPlaceholders : "";
+            formatted.add(resolveLineRender(tracked, slot, processed));
         }
         return formatted;
     }
 
-    private ScoreboardView.LineRender resolveLineRender(TrackedHud tracked, int slot, String processed, boolean bold) {
+    private ScoreboardView.LineRender resolveLineRender(TrackedHud tracked, int slot, String processed) {
         if (tracked == null) {
-            return buildLineRender(processed, bold);
+            return buildLineRender(processed);
         }
-        return tracked.cachedLineRender(slot, processed, bold, () -> buildLineRender(processed, bold));
+        return tracked.cachedLineRender(slot, processed, () -> buildLineRender(processed));
     }
 
-    private ScoreboardView.LineRender buildLineRender(String processed, boolean bold) {
+    private ScoreboardView.LineRender buildLineRender(String processed) {
         List<ScoreboardView.LineSegment> segments = parseSegments(processed);
-        return new ScoreboardView.LineRender(List.copyOf(segments), bold);
+        return new ScoreboardView.LineRender(List.copyOf(segments), false);
     }
 
     private PageState pageForPlayer(Player player) {
@@ -1041,30 +1039,22 @@ final class BetterScoreBoardService {
 
     private enum Axis { X, Y, Z }
 
-    private BoldResult stripBoldMarkers(String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return new BoldResult("", false);
-        }
-        StringBuilder builder = new StringBuilder();
-        boolean inside = false;
-        boolean pairFound = false;
-        for (char c : raw.toCharArray()) {
-            if (c == '*') {
-                if (inside) {
-                    pairFound = true;
-                }
-                inside = !inside;
-                continue;
-            }
-            builder.append(c);
-        }
-        return new BoldResult(builder.toString(), pairFound);
-    }
-
     private List<ScoreboardView.LineSegment> parseSegments(String value) {
         List<ScoreboardView.LineSegment> segments = new ArrayList<>();
         String content = value != null ? value : "";
         String currentColor = "";
+        boolean bold = false;
+        int lastLiteralStar = -1;
+        int starCount = 0;
+        for (int i = 0; i < content.length(); i++) {
+            if (content.charAt(i) == '*') {
+                starCount++;
+                lastLiteralStar = i;
+            }
+        }
+        if (starCount % 2 == 0) {
+            lastLiteralStar = -1;
+        }
         StringBuilder builder = new StringBuilder();
         for (int i = 0; i < content.length(); ) {
             char c = content.charAt(i);
@@ -1075,7 +1065,7 @@ final class BetterScoreBoardService {
                     String normalized = normalizeColor(candidate);
                     if (!normalized.isEmpty()) {
                         if (builder.length() > 0) {
-                            segments.add(new ScoreboardView.LineSegment(builder.toString(), currentColor));
+                            segments.add(new ScoreboardView.LineSegment(builder.toString(), currentColor, bold));
                             builder.setLength(0);
                         }
                         currentColor = normalized;
@@ -1084,14 +1074,28 @@ final class BetterScoreBoardService {
                     }
                 }
             }
+            if (c == '*') {
+                if (i == lastLiteralStar) {
+                    builder.append(c);
+                    i++;
+                    continue;
+                }
+                if (builder.length() > 0) {
+                    segments.add(new ScoreboardView.LineSegment(builder.toString(), currentColor, bold));
+                    builder.setLength(0);
+                }
+                bold = !bold;
+                i++;
+                continue;
+            }
             builder.append(c);
             i++;
         }
         if (builder.length() > 0) {
-            segments.add(new ScoreboardView.LineSegment(builder.toString(), currentColor));
+            segments.add(new ScoreboardView.LineSegment(builder.toString(), currentColor, bold));
         }
         if (segments.isEmpty()) {
-            segments.add(new ScoreboardView.LineSegment("", currentColor));
+            segments.add(new ScoreboardView.LineSegment("", currentColor, bold));
         }
         return segments;
     }
@@ -1135,8 +1139,6 @@ final class BetterScoreBoardService {
         }
         return new LineParts(color, text);
     }
-
-    private record BoldResult(String text, boolean bold) {}
 
     private record LineParts(String color, String text) {}
 
@@ -2562,16 +2564,16 @@ final class BetterScoreBoardService {
             this.factionSnapshot = new FactionSnapshot("", "", "", "0", "0", "0", "0", "0", "0");
         }
 
-        ScoreboardView.LineRender cachedLineRender(int slot, String raw, boolean bold, Supplier<ScoreboardView.LineRender> builder) {
+        ScoreboardView.LineRender cachedLineRender(int slot, String raw, Supplier<ScoreboardView.LineRender> builder) {
             if (slot < 0 || slot >= lineCache.length) {
                 return builder.get();
             }
             LineCacheEntry entry = lineCache[slot];
-            if (entry != null && entry.bold == bold && entry.raw.equals(raw)) {
+            if (entry != null && entry.raw.equals(raw)) {
                 return entry.render;
             }
             ScoreboardView.LineRender render = builder.get();
-            lineCache[slot] = new LineCacheEntry(raw, bold, render);
+            lineCache[slot] = new LineCacheEntry(raw, render);
             return render;
         }
 
@@ -2602,12 +2604,10 @@ final class BetterScoreBoardService {
 
     private static final class LineCacheEntry {
         final String raw;
-        final boolean bold;
         final ScoreboardView.LineRender render;
 
-        LineCacheEntry(String raw, boolean bold, ScoreboardView.LineRender render) {
+        LineCacheEntry(String raw, ScoreboardView.LineRender render) {
             this.raw = raw;
-            this.bold = bold;
             this.render = render;
         }
     }
