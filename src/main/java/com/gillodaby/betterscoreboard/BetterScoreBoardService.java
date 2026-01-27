@@ -309,6 +309,7 @@ final class BetterScoreBoardService {
         if (page == null) {
             return null;
         }
+        updateDynamicUsage(tracked, page);
         List<ScoreboardView.LineRender> formatted = formatLines(page, player, onlineCount, tracked);
         String rawTitle = page.title != null ? page.title : "";
         LineParts titleParts = decodeLine(applyPlaceholders(rawTitle, player, onlineCount, tracked));
@@ -393,69 +394,107 @@ final class BetterScoreBoardService {
 
     private String applyPlaceholders(String template, Player player, int onlineCount, TrackedHud tracked) {
         String result = normalizePercentPlaceholders(template);
-        if (template.contains("{server}")) {
+        if (result.contains("{server}")) {
             result = result.replace("{server}", serverName);
         }
-        if (template.contains("{player}")) {
+        if (result.contains("{player}")) {
             result = result.replace("{player}", safePlayerName(player));
         }
-        if (template.contains("{rank}")) {
+        if (result.contains("{rank}")) {
             result = result.replace("{rank}", formatRank(player, tracked));
         }
-        if (template.contains("{world}")) {
+        if (result.contains("{world}")) {
             result = result.replace("{world}", safeWorld(player));
         }
-        if (template.contains("{online}")) {
+        if (result.contains("{online}")) {
             result = result.replace("{online}", Integer.toString(Math.max(onlineCount, 0)));
         }
-        if (template.contains("{max_players}")) {
+        if (result.contains("{max_players}")) {
             result = result.replace("{max_players}", Integer.toString(resolveMaxPlayers(onlineCount)));
         }
-        if (template.contains("{playtime}")) {
+        if (result.contains("{playtime}")) {
             result = result.replace("{playtime}", formatPlaytime(player));
         }
-        if (template.contains("{totalplaytime}")) {
+        if (result.contains("{totalplaytime}")) {
             result = result.replace("{totalplaytime}", formatTotalPlaytime(player));
         }
-        if (template.contains("{tps}")) {
+        if (result.contains("{tps}")) {
             result = result.replace("{tps}", formatTps(player, tracked));
         }
-        if (containsAny(template, "{money}", "{balance}")) {
+        if (containsAny(result, "{money}", "{balance}")) {
             String balanceValue = formatBalance(player, tracked);
             result = result.replace("{money}", balanceValue);
             result = result.replace("{balance}", balanceValue);
         }
-        if (template.contains("{pos_x}")) {
+        if (result.contains("{pos_x}")) {
             result = result.replace("{pos_x}", formatPos(player, Axis.X));
         }
-        if (template.contains("{pos_y}")) {
+        if (result.contains("{pos_y}")) {
             result = result.replace("{pos_y}", formatPos(player, Axis.Y));
         }
-        if (template.contains("{pos_z}")) {
+        if (result.contains("{pos_z}")) {
             result = result.replace("{pos_z}", formatPos(player, Axis.Z));
         }
-        if (template.contains("{gamemode}")) {
+        if (result.contains("{gamemode}")) {
             result = result.replace("{gamemode}", formatGameMode(player));
         }
-        if (template.contains("{world_tick}")) {
+        if (result.contains("{world_tick}")) {
             result = result.replace("{world_tick}", formatWorldTick(player));
         }
-        if (template.contains("{chunk_x}")) {
+        if (result.contains("{chunk_x}")) {
             result = result.replace("{chunk_x}", formatChunk(player, Axis.X));
         }
-        if (template.contains("{chunk_z}")) {
+        if (result.contains("{chunk_z}")) {
             result = result.replace("{chunk_z}", formatChunk(player, Axis.Z));
         }
-        if (template.contains("{uuid}")) {
+        if (result.contains("{uuid}")) {
             result = result.replace("{uuid}", formatUuid(player));
         }
-        if (containsAny(template, "{faction}", "{faction_rank}", "{faction_tag}", "%faction%", "%faction_rank%", "%faction_tag%",
+        if (containsAny(result, "{faction}", "{faction_rank}", "{faction_tag}", "%faction%", "%faction_rank%", "%faction_tag%",
             "{power}", "{powermax}", "{factionpower}", "{factionpowermax}", "{claim}", "{maxclaim}",
             "%power%", "%powermax%", "%factionpower%", "%factionpowermax%", "%claim%", "%maxclaim%")) {
             result = normalizeFactionPlaceholders(result);
             result = replaceFactionTokens(result, tracked, player);
         }
         return result;
+    }
+
+    private void updateDynamicUsage(TrackedHud tracked, PageState page) {
+        if (tracked == null || page == null) {
+            return;
+        }
+        boolean needsBalance = false;
+        boolean needsRank = false;
+        boolean needsFaction = false;
+        if (page.title != null && !page.title.isEmpty()) {
+            String normalized = normalizePercentPlaceholders(page.title);
+            needsBalance = containsAny(normalized, "{money}", "{balance}");
+            needsRank = normalized.contains("{rank}");
+            needsFaction = containsAny(normalized, "{faction}", "{faction_rank}", "{faction_tag}",
+                "{power}", "{powermax}", "{factionpower}", "{factionpowermax}", "{claim}", "{maxclaim}");
+        }
+        if (page.lines != null) {
+            for (String line : page.lines) {
+                if (line == null || line.isEmpty()) {
+                    continue;
+                }
+                String normalized = normalizePercentPlaceholders(line);
+                if (!needsBalance && containsAny(normalized, "{money}", "{balance}")) {
+                    needsBalance = true;
+                }
+                if (!needsRank && normalized.contains("{rank}")) {
+                    needsRank = true;
+                }
+                if (!needsFaction && containsAny(normalized, "{faction}", "{faction_rank}", "{faction_tag}",
+                    "{power}", "{powermax}", "{factionpower}", "{factionpowermax}", "{claim}", "{maxclaim}")) {
+                    needsFaction = true;
+                }
+                if (needsBalance && needsRank && needsFaction) {
+                    break;
+                }
+            }
+        }
+        tracked.updateUsage(needsBalance, needsRank, needsFaction);
     }
 
     private String normalizePercentPlaceholders(String text) {
@@ -2545,6 +2584,9 @@ final class BetterScoreBoardService {
         double lastTpsValue;
         ScoreboardView lastView;
         final LineCacheEntry[] lineCache;
+        private volatile boolean needsBalance;
+        private volatile boolean needsRank;
+        private volatile boolean needsFaction;
         private volatile String balance;
         private volatile String rank;
         private volatile FactionSnapshot factionSnapshot;
@@ -2559,6 +2601,9 @@ final class BetterScoreBoardService {
             this.lastTpsValue = 20.0;
             this.lastView = null;
             this.lineCache = new LineCacheEntry[BetterScoreBoardHud.MAX_LINES];
+            this.needsBalance = false;
+            this.needsRank = false;
+            this.needsFaction = false;
             this.balance = "0";
             this.rank = "";
             this.factionSnapshot = new FactionSnapshot("", "", "", "0", "0", "0", "0", "0", "0");
@@ -2599,6 +2644,24 @@ final class BetterScoreBoardService {
 
         FactionSnapshot factionSnapshot() {
             return factionSnapshot;
+        }
+
+        void updateUsage(boolean needsBalance, boolean needsRank, boolean needsFaction) {
+            this.needsBalance = needsBalance;
+            this.needsRank = needsRank;
+            this.needsFaction = needsFaction;
+        }
+
+        boolean needsBalance() {
+            return needsBalance;
+        }
+
+        boolean needsRank() {
+            return needsRank;
+        }
+
+        boolean needsFaction() {
+            return needsFaction;
         }
     }
 
@@ -2663,14 +2726,29 @@ final class BetterScoreBoardService {
         if (player == null || player.wasRemoved()) {
             return;
         }
-        tracked.updateBalance(fetchBalanceNow(player));
-        String rank = fetchRankNow(player);
-        tracked.updateRank(rank != null ? normalizeLuckPermsColors(rank) : "");
-        tracked.updateFaction(fetchFactionSnapshot(player));
+        boolean needsBalance = tracked.needsBalance();
+        boolean needsRank = tracked.needsRank();
+        boolean needsFaction = tracked.needsFaction();
+        if (!needsBalance && !needsRank && !needsFaction) {
+            return;
+        }
+        if (needsBalance) {
+            tracked.updateBalance(fetchBalanceNow(player));
+        }
+        if (needsRank) {
+            String rank = fetchRankNow(player);
+            tracked.updateRank(rank != null ? normalizeLuckPermsColors(rank) : "");
+        }
+        if (needsFaction) {
+            tracked.updateFaction(fetchFactionSnapshot(player));
+        }
     }
 
     private void triggerDynamicDataRefresh(TrackedHud tracked) {
         if (tracked == null) {
+            return;
+        }
+        if (!tracked.needsBalance() && !tracked.needsRank() && !tracked.needsFaction()) {
             return;
         }
         dataRefresher.execute(() -> refreshDynamicDataFor(tracked));

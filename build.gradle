@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'com.gillodaby'
-version = '1.6.2'
+version = '1.6.5'
 
 tasks.named('jar') {
     archiveBaseName.set('BetterScoreBoard')
